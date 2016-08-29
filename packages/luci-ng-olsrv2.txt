@@ -1,0 +1,68 @@
+# Defaults
+freifunk-common
+community-profiles
+
+# Common
+mdnsd
+ip
+
+#firewall mods
+iptables-mod-conntrack-extra
+iptables-mod-extra
+iptables-mod-filter
+iptables-mod-ipopt
+iptables-mod-iprange
+iptables-mod-ipsec
+iptables-mod-nat-extra
+#iptables-mod-tee
+iptables-mod-tproxy
+iptables-mod-u32
+iptables-mod-ulog
+ip6tables-extra
+ip6tables-mod-nat
+kmod-ipt-nathelper-rtsp
+kmod-nf-nathelper
+kmod-nf-nathelper-extra
+kmod-gre
+
+# GUI
+luci2-ffwizard
+luci2-ffwizard-angular
+luci2-ffwizard-olsrd-ipv4
+luci2-ffwizard-olsrv2-ipv6
+luci2-ffwizard-fw
+luci2-ffwizard-kadnode
+luci2-ui-base
+luci2-rpc-base
+luci2-rpc-bwmon
+luci2-io-helper
+luci2-rpc-rrdns
+luci2-app-olsrd2
+
+# collectd
+collectd
+collectd-mod-iwinfo
+collectd-mod-load
+collectd-mod-memory
+collectd-mod-olsrd
+collectd-mod-ping
+collectd-mod-uptime
+
+# Common extra
+6in4
+chat
+comgt
+etherwake
+fdisk
+iftop
+ntpclient
+openvpn-openssl
+relayd
+resolveip
+tcpdump-mini
+mtr
+iperf
+tmux
+vnstat
+ethtool
+usbutils
