@@ -1,0 +1,19 @@
+# KVM and VMware Network Driver
+kmod-pcnet32
+kmod-vmxnet3
+kmod-rt2800-usb
+kmod-ath9k-htc
+kmod-rtl8187
+kmod-rtl8192cu
+kmod-usb2
+kmod-usb2-pci
+kmod-usb3
+kmod-usb-serial-option
+kmod-usb-serial-wwan
+kmod-usb-net-qmi-wwan
+kmod-usb-net-huawei-cdc-ncm
+kmod-usb-net-cdc-ether
+wpad
+iwinfo
+usb-modeswitch
+uqmi

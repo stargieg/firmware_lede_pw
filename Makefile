@@ -122,6 +122,7 @@ firmwares: stamp-clean-firmwares .stamp-firmwares
 	mv $(IB_BUILD_DIR)/$(shell basename $(IB_FILE) .tar.bz2) $(IB_BUILD_DIR)/imgbldr
 	export PATH=$(PATH):$(TOOLCHAIN_PATH); \
 	PACKAGES_PATH="$(FW_DIR)/packages"; \
+	PACKAGES_FILE_TARGET="$(FW_DIR)/packages/$(TARGET).txt"; \
 	for PROFILE_ITER in $(PROFILES); do \
 	  for PACKAGES_FILE in $(PACKAGES_LIST_DEFAULT); do \
 	    PROFILE=$$PROFILE_ITER \
@@ -139,9 +140,13 @@ firmwares: stamp-clean-firmwares .stamp-firmwares
 	    fi; \
 	    PACKAGES_FILE_ABS="$$PACKAGES_PATH/$$PACKAGES_FILE.txt"; \
 	    PACKAGES_LIST=$$(grep -v '^\#' $$PACKAGES_FILE_ABS | tr -t '\n' ' '); \
+	    if [[ -f "$$PACKAGES_FILE_TARGET" ]]; then \
+	       PACKAGES_LIST="$$PACKAGES_LIST $$(grep -v '^\#' $$PACKAGES_FILE_TARGET | tr -t '\n' ' ')"; \
+	    fi; \
 	    $(UMASK);\
 	    echo -e "\n *** Building Kathleen image file for profile \"$${PROFILE}\" with packages list \"$${PACKAGES_FILE}\".\n"; \
 	    $(MAKE) -C $(IB_BUILD_DIR)/imgbldr image PROFILE="$$PROFILE" PACKAGES="$$PACKAGES_LIST" BIN_DIR="$(IB_BUILD_DIR)/imgbldr/bin/$$PACKAGES_FILE" $$CUSTOM_POSTINST_PARAM || exit 1; \
+	    cp -a $(IB_BUILD_DIR)/imgbldr/build_dir/target-*/root-*/usr/lib/opkg/status $(IB_BUILD_DIR)/imgbldr/bin/$$PACKAGES_FILE/opkg-status.txt ;\
 	  done; \
 	done
 	mkdir -p $(FW_TARGET_DIR)

@@ -1,0 +1,13 @@
+kmod-rt2800-usb
+kmod-ath9k-htc
+kmod-rtl8187
+kmod-rtl8192cu
+kmod-usb-serial-option
+kmod-usb-serial-wwan
+kmod-usb-net-qmi-wwan
+kmod-usb-net-huawei-cdc-ncm
+kmod-usb-net-cdc-ether
+wpad
+iwinfo
+usb-modeswitch
+uqmi
