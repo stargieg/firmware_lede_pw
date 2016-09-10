@@ -44,22 +44,22 @@ luci-i18n-olsr-de
 luci-app-ntpc
 luci-i18n-ntpc-de
 
-luci-app-openvpn
-luci-i18n-openvpn-de
+#luci-app-openvpn
+#luci-i18n-openvpn-de
 
-luci-app-owm
-luci-app-owm-ant
-luci-app-owm-cmd
-luci-app-owm-gui
+#luci-app-owm
+#luci-app-owm-ant
+#luci-app-owm-cmd
+#luci-app-owm-gui
 
-luci-app-qos
-luci-i18n-qos-de
+#luci-app-qos
+#luci-i18n-qos-de
 
 luci-app-statistics
 luci-i18n-statistics-de
 
-luci-app-wol
-luci-i18n-wol-de
+#luci-app-wol
+#luci-i18n-wol-de
 
 luci-mod-freifunk
 luci-i18n-freifunk-de
@@ -70,20 +70,20 @@ luci-proto-ppp
 luci-proto-relay
 
 # Common extra
-6in4
-chat
-comgt
-etherwake
-fdisk
-iftop
-ntpclient
-openvpn-openssl
-relayd
-resolveip
-tcpdump-mini
-mtr
-iperf
-tmux
-vnstat
-ethtool
-usbutils
+#6in4
+#chat
+#comgt
+#etherwake
+#fdisk
+#iftop
+#ntpclient
+#openvpn-openssl
+#relayd
+#resolveip
+#tcpdump-mini
+#mtr
+#iperf
+#tmux
+#vnstat
+#ethtool
+#usbutils
