@@ -1,2 +1,3 @@
 023-mac80211-regdb.patch
 301-feeds-routing-olsrd-procd.patch
+302-feeds-routing-olsr2-logging-info.patch

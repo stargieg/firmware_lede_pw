@@ -1,0 +1,13 @@
+Index: source/feeds/routing/oonf-olsrd2/Makefile
+===================================================================
+--- source.orig/feeds/routing/oonf-olsrd2/Makefile
++++ source/feeds/routing/oonf-olsrd2/Makefile
+@@ -27,7 +27,7 @@ CMAKE_OPTIONAL_PLUGINS:= $(subst $(SPACE
+     ))
+ 
+ CMAKE_OPTIONS=-D OONF_NO_WERROR:Bool=true \
+-              -D OONF_LOGGING_LEVEL:String=debug \
++              -D OONF_LOGGING_LEVEL:String=warn \
+               -D OONF_NO_TESTING:Bool=true \
+               -D UCI:Bool=true \
+               -D OONF_APP_DEFAULT_CFG_HANDLER:String=uci \
