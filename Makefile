@@ -115,12 +115,12 @@ firmwares: stamp-clean-firmwares .stamp-firmwares
 .stamp-firmwares: .stamp-compiled
 	rm -rf $(IB_BUILD_DIR)
 	mkdir -p $(IB_BUILD_DIR)
-	$(eval TOOLCHAIN_PATH := $(shell printf "%s:" $(LEDE_SRC_DIR)/staging_dir/toolchain-*/bin))
-	$(eval IB_FILE := $(shell ls $(LEDE_SRC_DIR)/bin/targets/$(MAINTARGET)/$(SUBTARGET)/*imagebuilder*.tar.bz2))
+	# $(eval TOOLCHAIN_PATH := $(shell printf "%s:" $(LEDE_SRC_DIR)/staging_dir/toolchain-*/bin))
+	$(eval IB_FILE := $(shell ls $(LEDE_SRC_DIR)/bin/targets/$(MAINTARGET)/$(SUBTARGET)*/*imagebuilder*.tar.xz))
 	cd $(IB_BUILD_DIR); tar xf $(IB_FILE)
 	# shorten dir name to prevent too long paths
-	mv $(IB_BUILD_DIR)/$(shell basename $(IB_FILE) .tar.bz2) $(IB_BUILD_DIR)/imgbldr
-	export PATH=$(PATH):$(TOOLCHAIN_PATH); \
+	mv $(IB_BUILD_DIR)/$(shell basename $(IB_FILE) .tar.xz) $(IB_BUILD_DIR)/imgbldr
+	# export PATH=$(PATH):$(TOOLCHAIN_PATH); \
 	PACKAGES_PATH="$(FW_DIR)/packages"; \
 	PACKAGES_FILE_TARGET="$(FW_DIR)/packages/$(TARGET).txt"; \
 	for PROFILE_ITER in $(PROFILES); do \
@@ -184,15 +184,15 @@ firmwares: stamp-clean-firmwares .stamp-firmwares
 	done;
 	# copy imagebuilder, sdk and toolchain (if existing)
 	# remove old versions
-	rm -f $(FW_TARGET_DIR)/*imagebuilder*.tar.bz2
+	rm -f $(FW_TARGET_DIR)/*imagebuilder*.tar.xz
 	cp -a $(IB_FILE) $(FW_TARGET_DIR)/
 	# copy core packages
 	mkdir -p $(FW_TARGET_DIR)/packages
-	cp -a $(LEDE_SRC_DIR)/bin/targets/$(MAINTARGET)/$(SUBTARGET)/packages $(FW_TARGET_DIR)
+	cp -a $(LEDE_SRC_DIR)/bin/targets/$(MAINTARGET)/$(SUBTARGET)*/packages $(FW_TARGET_DIR)
 	# copy base, luci and routing packages
 	mkdir -p $(PACKAGE_TARGET_DIR)
 	cp -a $(LEDE_SRC_DIR)/bin/packages $(PACKAGE_TARGET_DIR)
-	rm -rf $(IB_BUILD_DIR)
+	#rm -rf $(IB_BUILD_DIR)
 	touch $@
 
 stamp-clean-%:
