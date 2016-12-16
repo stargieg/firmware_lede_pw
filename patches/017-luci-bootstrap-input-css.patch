@@ -1,0 +1,17 @@
+Index: a/feeds/luci/themes/luci-theme-bootstrap/htdocs/htdocs/luci-static/bootstrap/cascade.css
+===================================================================
+--- a/feeds/luci/themes/luci-theme-bootstrap/htdocs/luci-static/bootstrap/cascade.css	2015-04-09 01:44:12.000000000 +0200
++++ b/feeds/luci/themes/luci-theme-bootstrap/htdocs/luci-static/bootstrap/cascade.css	2015-04-25 12:54:35.000000000 +0200
+@@ -489,6 +489,12 @@
+ 
+ select {
+ 	padding: initial;
++	color: #303030;
++	background-color: #f8f8f8; 
++}
++
++input {   
++	color: #303030;
+ }
+ 
+ input[type=checkbox], input[type=radio] {

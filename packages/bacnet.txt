@@ -1,9 +1,13 @@
 # Common
-mdnsd
+-mdnsd
+avahi-nodbus-daemon
+avahi-daemon-service-http
+avahi-daemon-service-ssh
 ip
 automation-defaults
 
 # GUI-basics
+rpcd-mod-rpcsys
 uhttpd
 uhttpd-mod-ubus
 uhttpd-mod-tls
@@ -29,6 +33,7 @@ luci-proto-relay
 #6in4
 #chat
 #comgt
+curl
 #etherwake
 #fdisk
 #iftop
@@ -37,66 +42,13 @@ luci-proto-relay
 #relayd
 #resolveip
 #tcpdump-mini
+arp-scan
 #mtr
 #iperf
 #tmux
 #vnstat
 #ethtool
 #usbutils
-
-#Bacnet
-## Common
-mdnsd
-ip
-automation-defaults
-
-# GUI-basics
-uhttpd
-uhttpd-mod-ubus
-uhttpd-mod-tls
-px5g
-luci-theme-bootstrap
-luci-i18n-base-de
-luci-app-firewall
-luci-i18n-firewall-de
-luci-app-ntpc
-luci-i18n-ntpc-de
-#luci-app-openvpn
-#luci-i18n-openvpn-de
-luci-app-statistics
-luci-i18n-statistics-de
-#luci-app-wol
-#luci-i18n-wol-de
-luci-proto-3g
-luci-proto-ipv6
-luci-proto-ppp
-luci-proto-relay
-
-# Common extra
-#6in4
-#chat
-#comgt
-#etherwake
-#fdisk
-#iftop
-#ntpclient
-#openvpn-openssl
-#relayd
-#resolveip
-#tcpdump-mini
-#mtr
-#iperf
-#tmux
-#vnstat
-#ethtool
-#usbutils
-
-kmod-rtl8192cu
-kmod-rtl8192c-common
-rtl8192cu-firmware
-wpad
-libiwinfo-lua
-rpcd-mod-iwinfo
 
 #Bacnet
 luci-app-bacnet

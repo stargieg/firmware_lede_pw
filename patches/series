@@ -1,3 +1,8 @@
+010-vocore2.patch
+011-vocore2-switch-cfg.patch
 023-mac80211-regdb.patch
+017-luci-bootstrap-input-css.patch
+018-luci-theme-bootstrap.patch
 301-feeds-routing-olsrd-procd.patch
 302-feeds-routing-olsr2-logging-info.patch
+303-feeds-packages-shairport-enable.patch

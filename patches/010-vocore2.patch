@@ -1,0 +1,435 @@
+diff --git a/target/linux/ramips/base-files/lib/ramips.sh b/target/linux/ramips/base-files/lib/ramips.sh
+index 3793e58..6acb0d8 100755
+--- a/target/linux/ramips/base-files/lib/ramips.sh
++++ b/target/linux/ramips/base-files/lib/ramips.sh
+@@ -457,6 +457,9 @@ ramips_board_detect() {
+ 	*"VR500")
+ 		name="vr500"
+ 		;;
++	*"VoCore2")
++		name="vocore2"
++		;;
+ 	*"W150M")
+ 		name="w150m"
+ 		;;
+diff --git a/target/linux/ramips/base-files/lib/upgrade/platform.sh b/target/linux/ramips/base-files/lib/upgrade/platform.sh
+index 3c1fb41..dd3002e 100755
+--- a/target/linux/ramips/base-files/lib/upgrade/platform.sh
++++ b/target/linux/ramips/base-files/lib/upgrade/platform.sh
+@@ -132,6 +132,7 @@ platform_check_image() {
+ 	ur-336un|\
+ 	v22rw-2x2|\
+ 	vocore|\
++	vocore2|\
+ 	vr500|\
+ 	w150m|\
+ 	w2914nsv2|\
+diff --git a/target/linux/ramips/dts/VOCORE2-128M-SD.dts b/target/linux/ramips/dts/VOCORE2-128M-SD.dts
+new file mode 100644
+index 0000000..0e60f7c
+--- /dev/null
++++ b/target/linux/ramips/dts/VOCORE2-128M-SD.dts
+@@ -0,0 +1,15 @@
++/dts-v1/;
++
++#include "VOCORE2.dtsi"
++
++/ {
++	memory@0 {
++		device_type = "memory";
++		reg = <0x0 0x4000000>;
++	};
++	sdhci@10130000 {
++		mediatek,cd-poll;
++		status = "okay";
++	};
++};
++
+diff --git a/target/linux/ramips/dts/VOCORE2-128M.dts b/target/linux/ramips/dts/VOCORE2-128M.dts
+new file mode 100644
+index 0000000..8982bfd
+--- /dev/null
++++ b/target/linux/ramips/dts/VOCORE2-128M.dts
+@@ -0,0 +1,11 @@
++/dts-v1/;
++
++#include "VOCORE2.dtsi"
++
++/ {
++	memory@0 {
++		device_type = "memory";
++		reg = <0x0 0x8000000>;
++	};
++};
++
+diff --git a/target/linux/ramips/dts/VOCORE2-64M-SD.dts b/target/linux/ramips/dts/VOCORE2-64M-SD.dts
+new file mode 100644
+index 0000000..0e60f7c
+--- /dev/null
++++ b/target/linux/ramips/dts/VOCORE2-64M-SD.dts
+@@ -0,0 +1,15 @@
++/dts-v1/;
++
++#include "VOCORE2.dtsi"
++
++/ {
++	memory@0 {
++		device_type = "memory";
++		reg = <0x0 0x4000000>;
++	};
++	sdhci@10130000 {
++		mediatek,cd-poll;
++		status = "okay";
++	};
++};
++
+diff --git a/target/linux/ramips/dts/VOCORE2-64M.dts b/target/linux/ramips/dts/VOCORE2-64M.dts
+new file mode 100644
+index 0000000..85a64b8
+--- /dev/null
++++ b/target/linux/ramips/dts/VOCORE2-64M.dts
+@@ -0,0 +1,11 @@
++/dts-v1/;
++
++#include "VOCORE2.dtsi"
++
++/ {
++	memory@0 {
++		device_type = "memory";
++		reg = <0x0 0x4000000>;
++	};
++};
++
+diff --git a/target/linux/ramips/dts/VOCORE2.dtsi b/target/linux/ramips/dts/VOCORE2.dtsi
+new file mode 100644
+index 0000000..1940093
+--- /dev/null
++++ b/target/linux/ramips/dts/VOCORE2.dtsi
+@@ -0,0 +1,97 @@
++
++#include "mt7628an.dtsi"
++
++/ {
++	compatible = "vocore,vocore2", "mediatek,mt7628an-soc";
++	model = "VoCore2";
++
++	chosen {
++		bootargs = "console=ttyS2,115200";
++	};
++
++	gpio-leds {
++		compatible = "gpio-leds";
++		status {
++			label = "vocore2:fuchsia:status";
++			gpios = <&gpio1 6 1>;
++			default-state = "on";
++		};
++	};
++};
++
++&pinctrl {
++	state_default: pinctrl0 {
++		gpio {
++			ralink,group = "refclk", "gpio";
++			ralink,function = "gpio";
++		};
++		agpio {
++			ralink,group = "agpio";
++			ralink,function = "uart2";
++		};
++	};
++	uart1_pins: uart1 {
++		uart1 {
++			ralink,group = "uart1";
++			ralink,function = "uart1";
++		};
++	};
++	uart2_pins: uart2 {
++		uart2 {
++			ralink,group = "spis";
++			ralink,function = "pwm";
++		};
++	};
++};
++
++&wmac {
++	status = "okay";
++};
++
++&uart1 {
++	status = "okay";
++};
++
++&uart2 {
++	status = "okay";
++};
++
++&pwm {
++	status = "okay";
++};
++
++&spi0 {
++	status = "okay";
++
++	m25p80@0 {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		compatible = "jedec,spi-nor";
++		reg = <0>;
++		linux,modalias = "m25p80";
++		spi-max-frequency = <10000000>;
++		m25p,chunked-io = <32>;
++
++		partition@0 {
++			label = "u-boot";
++			reg = <0x0 0x30000>;
++			read-only;
++		};
++
++		partition@30000 {
++			label = "u-boot-env";
++			reg = <0x30000 0x10000>;
++		};
++
++		factory: partition@40000 {
++			label = "factory";
++			reg = <0x40000 0x10000>;
++			read-only;
++		};
++
++		partition@50000 {
++			label = "firmware";
++			reg = <0x50000 0xfb0000>;
++		};
++	};
++};
+diff --git a/target/linux/ramips/image/mt7628.mk b/target/linux/ramips/image/mt7628.mk
+index 7a7ddce..817a031 100644
+--- a/target/linux/ramips/image/mt7628.mk
++++ b/target/linux/ramips/image/mt7628.mk
+@@ -19,6 +19,42 @@ define Device/miwifi-nano
+ endef
+ TARGET_DEVICES += miwifi-nano
+ 
++define Device/vocore2-64M
++  DTS := VOCORE2-64M
++  IMAGE_SIZE := $(ralink_default_fw_size_16M)
++  SUPPORTED_DEVICES := vocore2
++  DEVICE_TITLE := Vocore VoCore 2 64M
++  DEVICE_PACKAGES := kmod-usb2 kmod-usb-ohci kmod-ledtrig-usbdev
++endef
++TARGET_DEVICES += vocore2-64M
++
++define Device/vocore2-64M-SD
++  DTS := VOCORE2-64M-SD
++  IMAGE_SIZE := $(ralink_default_fw_size_16M)
++  SUPPORTED_DEVICES := vocore2
++  DEVICE_TITLE := Vocore VoCore 2 64M w SD
++  DEVICE_PACKAGES := kmod-usb2 kmod-usb-ohci kmod-ledtrig-usbdev
++endef
++TARGET_DEVICES += vocore2-64M-SD
++
++define Device/vocore2-128M
++  DTS := VOCORE2-128M
++  IMAGE_SIZE := $(ralink_default_fw_size_16M)
++  SUPPORTED_DEVICES := vocore2
++  DEVICE_TITLE := Vocore VoCore 2 128M
++  DEVICE_PACKAGES := kmod-usb2 kmod-usb-ohci kmod-ledtrig-usbdev
++endef
++TARGET_DEVICES += vocore2-128M
++
++define Device/vocore2-128M-SD
++  DTS := VOCORE2-128M-SD
++  IMAGE_SIZE := $(ralink_default_fw_size_16M)
++  SUPPORTED_DEVICES := vocore2
++  DEVICE_TITLE := Vocore VoCore 2 128M w SD
++  DEVICE_PACKAGES := kmod-usb2 kmod-usb-ohci kmod-ledtrig-usbdev
++endef
++TARGET_DEVICES += vocore2-128M-SD
++
+ define Device/wl-wn575a3
+   DTS := WL-WN575A3
+   IMAGE_SIZE := $(ralink_default_fw_size_8M)
+diff --git a/target/linux/ramips/patches-4.4/0303-pinctrl-multiple-groups-for-functions-add-agpio.patch b/target/linux/ramips/patches-4.4/0303-pinctrl-multiple-groups-for-functions-add-agpio.patch
+new file mode 100644
+index 0000000..7fe7829
+--- /dev/null
++++ b/target/linux/ramips/patches-4.4/0303-pinctrl-multiple-groups-for-functions-add-agpio.patch
+@@ -0,0 +1,177 @@
++diff -Naur a/arch/mips/include/asm/mach-ralink/pinmux.h b/arch/mips/include/asm/mach-ralink/pinmux.h
++--- a/arch/mips/include/asm/mach-ralink/pinmux.h	2016-11-28 19:21:48.169669276 -0600
+++++ b/arch/mips/include/asm/mach-ralink/pinmux.h	2016-11-28 19:22:39.766732111 -0600
++@@ -33,6 +33,7 @@
++ 	int *pins;
++ 
++ 	int *groups;
+++	int **group_names;
++ 	int group_count;
++ 
++ 	int enabled;
++diff -Naur a/arch/mips/ralink/mt7620.c b/arch/mips/ralink/mt7620.c
++--- a/arch/mips/ralink/mt7620.c	2016-11-28 21:08:27.669738080 -0600
+++++ b/arch/mips/ralink/mt7620.c	2016-11-28 21:11:11.177069522 -0600
++@@ -276,7 +276,16 @@
++ 	FUNC("wled_an", 0, 44, 1),
++ };
++ 
+++static struct rt2880_pmx_func agpio_grp_mt7628[] = {
+++	FUNC("sd", 1, 0, 0 ),
+++	FUNC("uart2", 1, 0, 0),
+++	FUNC("pwm0", 1, 0, 0),
+++	FUNC("pwm1", 1, 0, 0),
+++	FUNC("spis", 1, 0, 0),
+++};
+++
++ #define MT7628_GPIO_MODE_MASK		0x3
+++#define MT7628_AGPIO_MODE_MASK		0x1
++ 
++ #define MT7628_GPIO_MODE_P4LED_KN	58
++ #define MT7628_GPIO_MODE_P3LED_KN	56
++@@ -305,6 +314,7 @@
++ #define MT7628_GPIO_MODE_CS1		4
++ #define MT7628_GPIO_MODE_SPIS		2
++ #define MT7628_GPIO_MODE_GPIO		0
+++#define MT7628_AGPIO_MODE_DIS		81
++ 
++ static struct rt2880_pmx_group mt7628an_pinmux_data[] = {
++ 	GRP_G("pwm1", pwm1_grp_mt7628, MT7628_GPIO_MODE_MASK,
++@@ -357,6 +367,8 @@
++ 				1, MT7628_GPIO_MODE_P3LED_KN),
++ 	GRP_G("p4led_kn", p4led_kn_grp_mt7628, MT7628_GPIO_MODE_MASK,
++ 				1, MT7628_GPIO_MODE_P4LED_KN),
+++	GRP_G("agpio", agpio_grp_mt7628, MT7628_AGPIO_MODE_MASK,
+++				1, MT7628_AGPIO_MODE_DIS),
++ 	{ 0 }
++ };
++ 
++@@ -530,8 +542,8 @@
++ 		periph_rate = MHZ(40);
++ 		pcmi2s_rate = MHZ(480);
++ 
++-		ralink_clk_add("10000d00.uartlite", periph_rate);
++-		ralink_clk_add("10000e00.uartlite", periph_rate);
+++		ralink_clk_add("10000d00.uart1", periph_rate);
+++		ralink_clk_add("10000e00.uart2", periph_rate);
++ 	} else {
++ 		cpu_pll_rate = mt7620_get_cpu_pll_rate(xtal_rate);
++ 		pll_rate = mt7620_get_pll_rate(xtal_rate, cpu_pll_rate);
++diff -Naur a/drivers/pinctrl/pinctrl-rt2880.c b/drivers/pinctrl/pinctrl-rt2880.c
++--- a/drivers/pinctrl/pinctrl-rt2880.c	2016-11-28 19:29:56.720430496 -0600
+++++ b/drivers/pinctrl/pinctrl-rt2880.c	2016-11-28 19:30:09.412708788 -0600
++@@ -28,6 +28,7 @@
++ 
++ #define SYSC_REG_GPIO_MODE	0x60
++ #define SYSC_REG_GPIO_MODE2	0x64
+++#define SYSC_REG_AGPIO_MODE	0x3C
++ 
++ struct rt2880_priv {
++ 	struct device *dev;
++@@ -46,6 +47,8 @@
++ 	int max_pins;
++ };
++ 
+++/*struct rt2880_pmx_group *rt2880_pinmux_data = NULL;*/
+++
++ static int rt2880_get_group_count(struct pinctrl_dev *pctrldev)
++ {
++ 	struct rt2880_priv *p = pinctrl_dev_get_drvdata(pctrldev);
++@@ -187,11 +190,8 @@
++ {
++ 	struct rt2880_priv *p = pinctrl_dev_get_drvdata(pctrldev);
++ 
++-	if (p->func[func]->group_count == 1)
++-		*groups = &p->group_names[p->func[func]->groups[0]];
++-	else
++-		*groups = p->group_names;
++-
+++	if (p->func[func]->group_count != 0)
+++		*groups = p->func[func]->group_names;
++ 	*num_groups = p->func[func]->group_count;
++ 
++ 	return 0;
++@@ -204,8 +204,9 @@
++ 	struct rt2880_priv *p = pinctrl_dev_get_drvdata(pctrldev);
++         u32 mode = 0;
++ 	u32 reg = SYSC_REG_GPIO_MODE;
++-	int i;
+++	int i, j;
++ 	int shift;
+++	int group_func;
++ 
++ 	/* dont allow double use */
++ 	if (p->groups[group].enabled) {
++@@ -217,9 +218,12 @@
++ 	p->func[func]->enabled = 1;
++ 
++ 	shift = p->groups[group].shift;
++-	if (shift >= 32) {
+++	if (shift >= 32 && shift < 64) {
++ 		shift -= 32;
++ 		reg = SYSC_REG_GPIO_MODE2;
+++	}else if (shift >= 64) {
+++		shift -= 64;
+++		reg = SYSC_REG_AGPIO_MODE;
++ 	}
++ 	mode = rt_sysc_r32(reg);
++ 	mode &= ~(p->groups[group].mask << shift);
++@@ -232,9 +236,15 @@
++ 	if (func == 0) {
++ 		mode |= p->groups[group].gpio << shift;
++ 	} else {
++-		for (i = 0; i < p->func[func]->pin_count; i++)
++-			p->gpio[p->func[func]->pins[i]] = 0;
++-		mode |= p->func[func]->value << shift;
+++		for (j = 0; j < p->groups[group].func_count; j++){
+++			if (strcmp(p->groups[group].func[j].name, p->func[func]->name) == 0){
+++				group_func = j;
+++				for (i = 0; i < p->func[func]->pin_count; i++)
+++					p->gpio[p->func[func]->pins[i]] = 0;
+++		
+++			}
+++		}
+++		mode |= p->groups[group].func[group_func].value << shift;
++ 	}
++ 	rt_sysc_w32(mode, reg);
++ 
++@@ -317,12 +327,30 @@
++ 	for (i = 0; i < p->group_count; i++) {
++ 		for (j = 0; j < p->groups[i].func_count; j++) {
++ 			f[c] = &p->groups[i].func[j];
++-			f[c]->groups = devm_kzalloc(p->dev, sizeof(int), GFP_KERNEL);
+++			f[c]->groups = devm_kzalloc(p->dev, sizeof(int) * p->group_count, GFP_KERNEL);
+++			if (!f[c]->groups)
+++				return -1;
+++			f[c]->group_names = devm_kzalloc(p->dev, sizeof(char *) * p->group_count, GFP_KERNEL);
+++			if (!f[c]->group_names)
+++				return -1;
++ 			f[c]->groups[0] = i;
++ 			f[c]->group_count = 1;
++ 			c++;
++ 		}
++ 	}
+++	f[0]->group_names = p->group_names;
+++	for (c = 1; c < p->func_count; c++) {
+++		f[c]->group_count = 0;
+++		for (i = 0; i < p->group_count; i++) {
+++			for (j = 0; j < p->groups[i].func_count; j++) {
+++				if (strcmp(f[c]->name, p->groups[i].func[j].name) == 0) {
+++					f[c]->groups[f[c]->group_count] = i;
+++					f[c]->group_names[f[c]->group_count] = p->groups[i].name;
+++					f[c]->group_count++;
+++				}
+++			}
+++		}
+++	}
++ 	return 0;
++ }
++ 
++@@ -445,7 +473,6 @@
++ 		range->pin_base = range->base;
++ 		pinctrl_add_gpio_range(dev, range);
++ 	}
++-
++ 	return 0;
++ }
++ 
