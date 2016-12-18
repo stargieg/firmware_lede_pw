@@ -24,12 +24,70 @@ index 3c1fb41..dd3002e 100755
  	vr500|\
  	w150m|\
  	w2914nsv2|\
-diff --git a/target/linux/ramips/dts/VOCORE2-128M-SD.dts b/target/linux/ramips/dts/VOCORE2-128M-SD.dts
+diff --git a/target/linux/ramips/dts/VOCORE2-BETA.dts b/target/linux/ramips/dts/VOCORE2-BETA.dts
 new file mode 100644
-index 0000000..0e60f7c
+index 0000000..5e58385
 --- /dev/null
-+++ b/target/linux/ramips/dts/VOCORE2-128M-SD.dts
-@@ -0,0 +1,15 @@
++++ b/target/linux/ramips/dts/VOCORE2-BETA.dts
+@@ -0,0 +1,52 @@
++/dts-v1/;
++
++#include "VOCORE2.dtsi"
++
++/
++{
++	memory@0 {
++		device_type = "memory";
++		reg = <0x0 0x4000000>;
++	};
++	sdhci@10130000 {
++		mediatek,cd-low;
++		status = "okay";
++	};
++};
++
++&spi0 {
++	status = "okay";
++
++	m25p80@0 {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		compatible = "jedec,spi-nor";
++		reg = <0>;
++		linux,modalias = "m25p80";
++		spi-max-frequency = <40000000>;
++		m25p,chunked-io = <32>;
++
++		partition@0 {
++			label = "u-boot";
++			reg = <0x0 0x30000>;
++			read-only;
++		};
++
++		partition@30000 {
++			label = "u-boot-env";
++			reg = <0x30000 0x10000>;
++		};
++
++		factory: partition@40000 {
++			label = "factory";
++			reg = <0x40000 0x10000>;
++			read-only;
++		};
++
++		partition@50000 {
++			label = "firmware";
++			reg = <0x50000 0xfb0000>;
++		};
++	};
++};
++
+diff --git a/target/linux/ramips/dts/VOCORE2-LITE.dts b/target/linux/ramips/dts/VOCORE2-LITE.dts
+new file mode 100644
+index 0000000..50a5372
+--- /dev/null
++++ b/target/linux/ramips/dts/VOCORE2-LITE.dts
+@@ -0,0 +1,51 @@
 +/dts-v1/;
 +
 +#include "VOCORE2.dtsi"
@@ -45,12 +103,48 @@ index 0000000..0e60f7c
 +	};
 +};
 +
-diff --git a/target/linux/ramips/dts/VOCORE2-128M.dts b/target/linux/ramips/dts/VOCORE2-128M.dts
++&spi0 {
++	status = "okay";
++
++	m25p80@0 {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		compatible = "jedec,spi-nor";
++		reg = <0>;
++		linux,modalias = "m25p80";
++		spi-max-frequency = <40000000>;
++		m25p,chunked-io = <32>;
++
++		partition@0 {
++			label = "u-boot";
++			reg = <0x0 0x30000>;
++			read-only;
++		};
++
++		partition@30000 {
++			label = "u-boot-env";
++			reg = <0x30000 0x10000>;
++		};
++
++		factory: partition@40000 {
++			label = "factory";
++			reg = <0x40000 0x10000>;
++			read-only;
++		};
++
++		partition@50000 {
++			label = "firmware";
++			reg = <0x50000 0x7b0000>;
++		};
++	};
++};
++
+diff --git a/target/linux/ramips/dts/VOCORE2-ULTIMATE.dts b/target/linux/ramips/dts/VOCORE2-ULTIMATE.dts
 new file mode 100644
-index 0000000..8982bfd
+index 0000000..3e087e8
 --- /dev/null
-+++ b/target/linux/ramips/dts/VOCORE2-128M.dts
-@@ -0,0 +1,11 @@
++++ b/target/linux/ramips/dts/VOCORE2-ULTIMATE.dts
+@@ -0,0 +1,50 @@
 +/dts-v1/;
 +
 +#include "VOCORE2.dtsi"
@@ -60,35 +154,53 @@ index 0000000..8982bfd
 +		device_type = "memory";
 +		reg = <0x0 0x8000000>;
 +	};
-+};
-+
-diff --git a/target/linux/ramips/dts/VOCORE2-64M-SD.dts b/target/linux/ramips/dts/VOCORE2-64M-SD.dts
-new file mode 100644
-index 0000000..0e60f7c
---- /dev/null
-+++ b/target/linux/ramips/dts/VOCORE2-64M-SD.dts
-@@ -0,0 +1,15 @@
-+/dts-v1/;
-+
-+#include "VOCORE2.dtsi"
-+
-+/ {
-+	memory@0 {
-+		device_type = "memory";
-+		reg = <0x0 0x4000000>;
-+	};
 +	sdhci@10130000 {
-+		mediatek,cd-poll;
++		mediatek,cd-low;
 +		status = "okay";
 +	};
 +};
 +
-diff --git a/target/linux/ramips/dts/VOCORE2-64M.dts b/target/linux/ramips/dts/VOCORE2-64M.dts
++&spi0 {
++	status = "okay";
++
++	m25p80@0 {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		compatible = "jedec,spi-nor";
++		reg = <0>;
++		linux,modalias = "m25p80";
++		spi-max-frequency = <40000000>;
++		m25p,chunked-io = <32>;
++
++		partition@0 {
++			label = "u-boot";
++			reg = <0x0 0x30000>;
++			read-only;
++		};
++
++		partition@30000 {
++			label = "u-boot-env";
++			reg = <0x30000 0x10000>;
++		};
++
++		factory: partition@40000 {
++			label = "factory";
++			reg = <0x40000 0x10000>;
++			read-only;
++		};
++
++		partition@50000 {
++			label = "firmware";
++			reg = <0x50000 0xfb0000>;
++		};
++	};
++};
+diff --git a/target/linux/ramips/dts/VOCORE2.dts b/target/linux/ramips/dts/VOCORE2.dts
 new file mode 100644
-index 0000000..85a64b8
+index 0000000..3e087e8
 --- /dev/null
-+++ b/target/linux/ramips/dts/VOCORE2-64M.dts
-@@ -0,0 +1,11 @@
++++ b/target/linux/ramips/dts/VOCORE2.dts
+@@ -0,0 +1,50 @@
 +/dts-v1/;
 +
 +#include "VOCORE2.dtsi"
@@ -96,18 +208,59 @@ index 0000000..85a64b8
 +/ {
 +	memory@0 {
 +		device_type = "memory";
-+		reg = <0x0 0x4000000>;
++		reg = <0x0 0x8000000>;
++	};
++	sdhci@10130000 {
++		mediatek,cd-low;
++		status = "okay";
 +	};
 +};
 +
++&spi0 {
++	status = "okay";
++
++	m25p80@0 {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		compatible = "jedec,spi-nor";
++		reg = <0>;
++		linux,modalias = "m25p80";
++		spi-max-frequency = <40000000>;
++		m25p,chunked-io = <32>;
++
++		partition@0 {
++			label = "u-boot";
++			reg = <0x0 0x30000>;
++			read-only;
++		};
++
++		partition@30000 {
++			label = "u-boot-env";
++			reg = <0x30000 0x10000>;
++		};
++
++		factory: partition@40000 {
++			label = "factory";
++			reg = <0x40000 0x10000>;
++			read-only;
++		};
++
++		partition@50000 {
++			label = "firmware";
++			reg = <0x50000 0xfb0000>;
++		};
++	};
++};
 diff --git a/target/linux/ramips/dts/VOCORE2.dtsi b/target/linux/ramips/dts/VOCORE2.dtsi
 new file mode 100644
-index 0000000..1940093
+index 0000000..0851aac
 --- /dev/null
 +++ b/target/linux/ramips/dts/VOCORE2.dtsi
-@@ -0,0 +1,97 @@
+@@ -0,0 +1,68 @@
 +
 +#include "mt7628an.dtsi"
++
++#include <dt-bindings/input/input.h>
 +
 +/ {
 +	compatible = "vocore,vocore2", "mediatek,mt7628an-soc";
@@ -117,10 +270,14 @@ index 0000000..1940093
 +		bootargs = "console=ttyS2,115200";
 +	};
 +
++	aliases {
++		serial0 = &uart2;
++	};
++
 +	gpio-leds {
 +		compatible = "gpio-leds";
 +		status {
-+			label = "vocore2:fuchsia:status";
++			label = "vocore2:pink:status";
 +			gpios = <&gpio1 6 1>;
 +			default-state = "on";
 +		};
@@ -168,84 +325,49 @@ index 0000000..1940093
 +	status = "okay";
 +};
 +
-+&spi0 {
-+	status = "okay";
-+
-+	m25p80@0 {
-+		#address-cells = <1>;
-+		#size-cells = <1>;
-+		compatible = "jedec,spi-nor";
-+		reg = <0>;
-+		linux,modalias = "m25p80";
-+		spi-max-frequency = <10000000>;
-+		m25p,chunked-io = <32>;
-+
-+		partition@0 {
-+			label = "u-boot";
-+			reg = <0x0 0x30000>;
-+			read-only;
-+		};
-+
-+		partition@30000 {
-+			label = "u-boot-env";
-+			reg = <0x30000 0x10000>;
-+		};
-+
-+		factory: partition@40000 {
-+			label = "factory";
-+			reg = <0x40000 0x10000>;
-+			read-only;
-+		};
-+
-+		partition@50000 {
-+			label = "firmware";
-+			reg = <0x50000 0xfb0000>;
-+		};
-+	};
-+};
 diff --git a/target/linux/ramips/image/mt7628.mk b/target/linux/ramips/image/mt7628.mk
-index 7a7ddce..817a031 100644
+index 7a7ddce..dfab351 100644
 --- a/target/linux/ramips/image/mt7628.mk
 +++ b/target/linux/ramips/image/mt7628.mk
 @@ -19,6 +19,42 @@ define Device/miwifi-nano
  endef
  TARGET_DEVICES += miwifi-nano
  
-+define Device/vocore2-64M
-+  DTS := VOCORE2-64M
++define Device/vocore2
++  DTS := VOCORE2
 +  IMAGE_SIZE := $(ralink_default_fw_size_16M)
 +  SUPPORTED_DEVICES := vocore2
-+  DEVICE_TITLE := Vocore VoCore 2 64M
-+  DEVICE_PACKAGES := kmod-usb2 kmod-usb-ohci kmod-ledtrig-usbdev
++  DEVICE_TITLE := Vocore VoCore 2
++  DEVICE_PACKAGES := luci-mod-admin-full luci-theme-bootstrap
 +endef
-+TARGET_DEVICES += vocore2-64M
++TARGET_DEVICES += vocore2
 +
-+define Device/vocore2-64M-SD
-+  DTS := VOCORE2-64M-SD
++define Device/vocore2-beta
++  DTS := VOCORE2-BETA
 +  IMAGE_SIZE := $(ralink_default_fw_size_16M)
 +  SUPPORTED_DEVICES := vocore2
-+  DEVICE_TITLE := Vocore VoCore 2 64M w SD
-+  DEVICE_PACKAGES := kmod-usb2 kmod-usb-ohci kmod-ledtrig-usbdev
++  DEVICE_TITLE := Vocore VoCore 2 Beta
++  DEVICE_PACKAGES := luci-mod-admin-full luci-theme-bootstrap
 +endef
-+TARGET_DEVICES += vocore2-64M-SD
++TARGET_DEVICES += vocore2-beta
 +
-+define Device/vocore2-128M
-+  DTS := VOCORE2-128M
-+  IMAGE_SIZE := $(ralink_default_fw_size_16M)
++define Device/vocore2-lite
++  DTS := VOCORE2-LITE
++  IMAGE_SIZE := $(ralink_default_fw_size_8M)
 +  SUPPORTED_DEVICES := vocore2
-+  DEVICE_TITLE := Vocore VoCore 2 128M
-+  DEVICE_PACKAGES := kmod-usb2 kmod-usb-ohci kmod-ledtrig-usbdev
++  DEVICE_TITLE := Vocore VoCore 2 Lite
++  DEVICE_PACKAGES := luci-mod-admin-full luci-theme-bootstrap
 +endef
-+TARGET_DEVICES += vocore2-128M
++TARGET_DEVICES += vocore2-lite
 +
-+define Device/vocore2-128M-SD
-+  DTS := VOCORE2-128M-SD
++define Device/vocore2-ultimate
++  DTS := VOCORE2-ULTIMATE
 +  IMAGE_SIZE := $(ralink_default_fw_size_16M)
 +  SUPPORTED_DEVICES := vocore2
-+  DEVICE_TITLE := Vocore VoCore 2 128M w SD
-+  DEVICE_PACKAGES := kmod-usb2 kmod-usb-ohci kmod-ledtrig-usbdev
++  DEVICE_TITLE := Vocore VoCore 2 Ultimate (or airplay)
++  DEVICE_PACKAGES := luci-mod-admin-full luci-theme-bootstrap
 +endef
-+TARGET_DEVICES += vocore2-128M-SD
++TARGET_DEVICES += vocore2-ultimate
 +
  define Device/wl-wn575a3
    DTS := WL-WN575A3
