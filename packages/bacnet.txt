@@ -56,3 +56,6 @@ bacnet-stack-bip
 bacnet-stack-bip6
 bacnet-stack-ethernet
 bacnet-stack-mstp
+
+#KNX
+luci-app-knxd
