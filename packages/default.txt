@@ -34,3 +34,6 @@ arp-scan
 #vnstat
 #ethtool
 #usbutils
+
+# Set firmware defaults
+pw-defaults
