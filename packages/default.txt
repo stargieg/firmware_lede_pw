@@ -1,0 +1,36 @@
+# Common
+-mdnsd
+avahi-nodbus-daemon
+avahi-daemon-service-http
+avahi-daemon-service-ssh
+ip
+
+# GUI-basics
+rpcd-mod-rpcsys
+uhttpd
+uhttpd-mod-ubus
+px5g-standalone
+#libustream-wolfssl
+libustream-openssl
+#libustream-mbedtls
+
+# Common extra
+#6in4
+#chat
+#comgt
+curl
+#etherwake
+#fdisk
+#iftop
+#ntpclient
+#openvpn-openssl
+#relayd
+#resolveip
+#tcpdump-mini
+arp-scan
+#mtr
+#iperf
+#tmux
+#vnstat
+#ethtool
+#usbutils

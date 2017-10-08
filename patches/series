@@ -1,5 +1,2 @@
 023-mac80211-regdb.patch
-018-luci-theme-bootstrap.patch
-302-feeds-routing-olsr2-logging-info.patch
-303-feeds-packages-shairport-enable.patch
 305-feeds-packages-avahi-add-https.patch
