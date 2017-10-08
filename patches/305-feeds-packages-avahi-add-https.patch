@@ -1,0 +1,14 @@
+diff --git a/feeds/packages/libs/avahi/files/service-http b/feeds/packages/libs/avahi/files/service-http
+index 3262037..f092347 100644
+--- a/feeds/packages/libs/avahi/files/service-http
++++ b/feeds/packages/libs/avahi/files/service-http
+@@ -7,4 +7,9 @@
+    <port>80</port>
+    <txt-record>path=/</txt-record>
+   </service>
++  <service>
++   <type>_https._tcp</type>
++   <port>443</port>
++   <txt-record>path=/</txt-record>
++  </service>
+ </service-group>

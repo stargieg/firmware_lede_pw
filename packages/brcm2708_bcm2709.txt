@@ -1,0 +1,12 @@
+#rpi
+kmod-rtl8192cu
+kmod-rtl8192c-common
+rtl8192cu-firmware
+kmod-sound-arm-bcm2835
+wpad
+libiwinfo-lua
+rpcd-mod-iwinfo
+luci-app-mjpg-streamer
+madplay-alsa
+mjpg-streamer
+shairport-sync-polarssl

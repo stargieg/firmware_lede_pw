@@ -10,8 +10,10 @@ automation-defaults
 rpcd-mod-rpcsys
 uhttpd
 uhttpd-mod-ubus
-uhttpd-mod-tls
-px5g-polarssl
+px5g-standalone
+#libustream-wolfssl
+libustream-openssl
+#libustream-mbedtls
 luci-theme-bootstrap
 luci-i18n-base-de
 luci-app-firewall
@@ -59,3 +61,5 @@ bacnet-stack-mstp
 
 #KNX
 luci-app-knxd
+luci-app-linknx_gen
+#luci-app-linknx_statistics

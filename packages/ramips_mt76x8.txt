@@ -1,0 +1,17 @@
+#Vcore2
+kmod-sdhci-mt7620
+kmod-sound-mt7620
+kmod-sound-soc-ac97
+kmod-i2c-gpio
+kmod-i2c-mt7621
+kmod-pwm-mediatek
+kmod-leds-gpio
+kmod-ledtrig-gpio
+kmod-ledtrig-netdev
+kmod-usb-ohci
+libiwinfo-lua
+rpcd-mod-iwinfo
+luci-app-mjpg-streamer
+madplay-alsa
+mjpg-streamer
+shairport-sync-polarssl
