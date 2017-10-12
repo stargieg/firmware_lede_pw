@@ -1,7 +1,5 @@
 # Common
 -mdnsd
-#BUG
--mod-usb-core
 avahi-nodbus-daemon
 avahi-daemon-service-http
 avahi-daemon-service-ssh

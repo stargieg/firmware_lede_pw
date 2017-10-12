@@ -43,6 +43,9 @@ lede-clean: stamp-clean-lede-cleaned .stamp-lede-cleaned
 lede-clean-bin:
 	rm -rf $(LEDE_SRC_DIR)/bin
 
+lede-clean-tmp:
+	rm -rf $(LEDE_SRC_DIR)/tmp
+
 # update lede and checkout specified commit
 lede-update: stamp-clean-lede-updated .stamp-lede-updated
 .stamp-lede-updated: .stamp-lede-cleaned
@@ -87,9 +90,8 @@ else
 endif
 
 # lede config
-$(LEDE_SRC_DIR)/.config: .stamp-patched $(TARGET_CONFIG) .stamp-build_rev
+$(LEDE_SRC_DIR)/.config: .stamp-patched $(TARGET_CONFIG) .stamp-build_rev lede-clean-tmp
 	cat $(TARGET_CONFIG) >$(LEDE_SRC_DIR)/.config
-	sed -i "/^CONFIG_VERSION_NUMBER=/ s/\"$$/\-$(FW_REVISION)\"/" $(LEDE_SRC_DIR)/.config
 	sed -i "/^CONFIG_VERSION_REPO=/ s/\"$$/\/$(FW_REVISION)\"/" $(LEDE_SRC_DIR)/.config
 	$(UMASK); \
 	  $(MAKE) -C $(LEDE_SRC_DIR) defconfig
@@ -145,8 +147,10 @@ firmwares: stamp-clean-firmwares .stamp-firmwares
 	    fi; \
 	    $(UMASK);\
 	    echo -e "\n *** Building Kathleen image file for profile \"$${PROFILE}\" with packages list \"$${PACKAGES_FILE}\".\n"; \
-	    $(MAKE) -C $(IB_BUILD_DIR)/imgbldr image PROFILE="$$PROFILE" PACKAGES="$$PACKAGES_LIST" BIN_DIR="$(IB_BUILD_DIR)/imgbldr/bin/$$PACKAGES_FILE" $$CUSTOM_POSTINST_PARAM || exit 1; \
-	    cp -a $(IB_BUILD_DIR)/imgbldr/build_dir/target-*/root-*/usr/lib/opkg/status $(IB_BUILD_DIR)/imgbldr/bin/$$PACKAGES_FILE/opkg-status.txt ;\
+	    $(MAKE) -C $(IB_BUILD_DIR)/imgbldr image PROFILE="$$PROFILE" PACKAGES="$$PACKAGES_LIST" $$CUSTOM_POSTINST_PARAM || exit 1; \
+	    mkdir -p $(IB_BUILD_DIR)/bin/$$PACKAGES_FILE; \
+	    cp -a $(IB_BUILD_DIR)/imgbldr/build_dir/target-*/root-*/usr/lib/opkg/status $(IB_BUILD_DIR)/bin/$$PACKAGES_FILE/opkg-status.txt ;\
+	    mv $(IB_BUILD_DIR)/imgbldr/bin/targets/$(MAINTARGET)/$(SUBTARGET)/* $(IB_BUILD_DIR)/bin/$$PACKAGES_FILE/; \
 	  done; \
 	done
 	mkdir -p $(FW_TARGET_DIR)
@@ -168,7 +172,7 @@ firmwares: stamp-clean-firmwares .stamp-firmwares
 	  echo "Feed $$FEED: repository from $$FEED_GIT_REPO, git branch \"$$FEED_GIT_BRANCH_ESC\", revision $$FEED_REVISION" >> $$VERSION_FILE; \
 	done
 	# copy different firmwares (like vpn, minimal) including imagebuilder
-	for DIR_ABS in $(IB_BUILD_DIR)/imgbldr/bin/*; do \
+	for DIR_ABS in $(IB_BUILD_DIR)/bin/*; do \
 	  TARGET_DIR=$(FW_TARGET_DIR)/$$(basename $$DIR_ABS); \
 	  rm -rf $$TARGET_DIR; \
 	  mv $$DIR_ABS $$TARGET_DIR; \
