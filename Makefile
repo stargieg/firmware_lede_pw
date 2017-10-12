@@ -99,7 +99,7 @@ $(LEDE_SRC_DIR)/.config: .stamp-patched $(TARGET_CONFIG) .stamp-build_rev lede-c
 # prepare lede working copy
 prepare: stamp-clean-prepared .stamp-prepared
 .stamp-prepared: .stamp-patched $(LEDE_SRC_DIR)/.config
-	sed -i 's,^# REVISION:=.*,REVISION:=$(FW_REVISION),g' $(LEDE_SRC_DIR)/include/version.mk
+	sed -i 's,.*REVISION:=.*,REVISION:=$(FW_REVISION),g' $(LEDE_SRC_DIR)/include/version.mk
 	touch $@
 
 # compile
