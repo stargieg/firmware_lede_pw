@@ -6,6 +6,7 @@ TARGET=ar71xx_generic
 #TARGET=brcm2708_bcm2708
 #TARGET=brcm2708_bcm2709
 #TARGET=brcm2708_bcm2710
+#TARGET=mvebu_generic
 #TARGET=mpc85xx_generic
 #TARGET=ramips_mt7620
 #TARGET=ramips_rt305x
