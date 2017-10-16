@@ -1,458 +1,25 @@
-From 3b97677eda0c5b496cc78cb55a82a1885c842b26 Mon Sep 17 00:00:00 2001
-From: Michael Altizer <xiche@verizon.net>
-Date: Mon, 26 Dec 2016 16:58:41 -0500
-Subject: [PATCH 1/4] Add BTRFS root filesystem support.
+From ba20c5cb756d03655fff89a81bbeda0420967df1 Mon Sep 17 00:00:00 2001
+From: Ryan Mounce <ryan@mounce.com.au>
+Date: Sat, 3 Jun 2017 01:56:55 +0930
+Subject: [PATCH 1/3] mvsw61xx: enable internal delay for 6176 CPU ports
 
+RGMII internal delay must be enabled to support some devices where PCB
+trace length is short. There is no harm in enabling if unnecessary.
+
+Patch authored by Michael Altizer <xiche@verizon.net>, rewritten to comply
+with LEDE submission requirements.
+
+Signed-off-by: Ryan Mounce <ryan@mounce.com.au>
 ---
- config/Config-images.in                            |  6 ++
- include/image.mk                                   |  7 ++
- target/Config.in                                   |  3 +
- tools/Makefile                                     |  4 ++
- tools/btrfs-progs/Makefile                         | 43 ++++++++++++
- ...thread_join-instead-of-pthread_tryjoin_np.patch | 11 ++++
- tools/lzo/Makefile                                 | 37 +++++++++++
- tools/util-linux/Makefile                          | 48 ++++++++++++++
- .../patches/0001-fix-uClibc-ng-scanf-check.patch   | 34 ++++++++++
- .../patches/003-fix_pkgconfig_files.patch          | 76 ++++++++++++++++++++++
- tools/zlib/Makefile                                | 36 ++++++++++
- 11 files changed, 305 insertions(+)
- create mode 100644 tools/btrfs-progs/Makefile
- create mode 100644 tools/btrfs-progs/patches/0001-use-pthread_join-instead-of-pthread_tryjoin_np.patch
- create mode 100644 tools/lzo/Makefile
- create mode 100644 tools/util-linux/Makefile
- create mode 100644 tools/util-linux/patches/0001-fix-uClibc-ng-scanf-check.patch
- create mode 100644 tools/util-linux/patches/003-fix_pkgconfig_files.patch
- create mode 100644 tools/zlib/Makefile
-
-diff --git a/config/Config-images.in b/config/Config-images.in
-index 8e295939d95..0222ebf24b1 100644
---- a/config/Config-images.in
-+++ b/config/Config-images.in
-@@ -67,6 +67,12 @@ menu "Target Images"
- 
- 	comment "Root filesystem images"
- 
-+	config TARGET_ROOTFS_BTRFS
-+		bool "btrfs"
-+		default y if USES_BTRFS
-+		help
-+		  Build a btrfs root filesystem.
-+
- 	menuconfig TARGET_ROOTFS_EXT4FS
- 		bool "ext4"
- 		default y if USES_EXT4
-diff --git a/include/image.mk b/include/image.mk
-index 81519cd1834..03628992aba 100644
---- a/include/image.mk
-+++ b/include/image.mk
-@@ -95,6 +95,7 @@ fs-types-$(CONFIG_TARGET_ROOTFS_JFFS2_NAND) += $(addprefix jffs2-nand-,$(NAND_BL
- fs-types-$(CONFIG_TARGET_ROOTFS_EXT4FS) += ext4
- fs-types-$(CONFIG_TARGET_ROOTFS_ISO) += iso
- fs-types-$(CONFIG_TARGET_ROOTFS_UBIFS) += ubifs
-+fs-types-$(CONFIG_TARGET_ROOTFS_BTRFS) += btrfs
- fs-subtypes-$(CONFIG_TARGET_ROOTFS_JFFS2) += $(addsuffix -raw,$(addprefix jffs2-,$(JFFS2_BLOCKSIZE)))
- 
- TARGET_FILESYSTEMS := $(fs-types-y)
-@@ -259,6 +260,12 @@ define Image/mkfs/ext4
- 		$@ $(call mkfs_target_dir,$(1))/
- endef
- 
-+define Image/mkfs/btrfs
-+	dd if=/dev/zero bs=1M count=$(CONFIG_TARGET_ROOTFS_PARTSIZE) of=$@
-+	$(STAGING_DIR_HOST)/bin/mkfs.btrfs -f -m single -d single \
-+		-r $(call mkfs_target_dir,$(1))/ $@
-+endef
-+
- define Image/Manifest
- 	$(STAGING_DIR_HOST)/bin/opkg \
- 		--offline-root $(TARGET_DIR) \
-diff --git a/target/Config.in b/target/Config.in
-index 9ff70968801..f34011ec8c3 100644
---- a/target/Config.in
-+++ b/target/Config.in
-@@ -54,6 +54,9 @@ config USES_JFFS2
- config USES_JFFS2_NAND
- 	bool
- 
-+config USES_BTRFS
-+	bool
-+
- config USES_EXT4
- 	bool
- 
-diff --git a/tools/Makefile b/tools/Makefile
-index 4d338cca630..024699bbccf 100644
---- a/tools/Makefile
-+++ b/tools/Makefile
-@@ -38,6 +38,7 @@ tools-$(BUILD_B43_TOOLS) += b43-tools
- tools-$(BUILD_ISL) += isl
- tools-$(CONFIG_USE_SPARSE) += sparse
- tools-$(CONFIG_TARGET_apm821xx) += genext2fs
-+tools-y += lzo util-linux zlib btrfs-progs
- 
- # builddir dependencies
- $(curdir)/bison/compile := $(curdir)/flex/install
-@@ -72,6 +73,9 @@ $(curdir)/libressl/compile := $(curdir)/pkg-config/compile
- $(curdir)/mkimage/compile += $(curdir)/libressl/compile
- $(curdir)/firmware-utils/compile += $(curdir)/libressl/compile
- $(curdir)/cmake/compile += $(curdir)/libressl/compile
-+$(curdir)/lzo/compile := $(curdir)/libtool/compile
-+$(curdir)/util-linux/compile := $(curdir)/libtool/compile
-+$(curdir)/btrfs-progs/compile := $(curdir)/util-linux/compile $(curdir)/lzo/compile $(curdir)/zlib/compile
- 
- ifneq ($(HOST_OS),Linux)
-   tools-y += coreutils
-diff --git a/tools/btrfs-progs/Makefile b/tools/btrfs-progs/Makefile
-new file mode 100644
-index 00000000000..30980487983
---- /dev/null
-+++ b/tools/btrfs-progs/Makefile
-@@ -0,0 +1,43 @@
-+#
-+# Copyright (C) 2009-2014 OpenWrt.org
-+#
-+# This is free software, licensed under the GNU General Public License v2.
-+# See /LICENSE for more information.
-+#
-+
-+include $(TOPDIR)/rules.mk
-+
-+PKG_NAME:=btrfs-progs
-+PKG_VERSION:=4.7.2
-+PKG_RELEASE:=1
-+
-+PKG_SOURCE:=$(PKG_NAME)-v$(PKG_VERSION).tar.xz
-+PKG_SOURCE_URL:=@KERNEL/linux/kernel/people/kdave/btrfs-progs/
-+PKG_MD5SUM:=f49bc9e143ffe60260c5bd70ef3b624576673f8b50f41e309892a425f7fbe60f
-+
-+HOST_BUILD_DIR:=$(BUILD_DIR_HOST)/$(PKG_NAME)-v$(PKG_VERSION)
-+
-+HOST_BUILD_PARALLEL:=1
-+
-+HOST_FIXUP:=autoreconf
-+
-+include $(INCLUDE_DIR)/host-build.mk
-+
-+HOST_CONFIGURE_ARGS += \
-+	--disable-backtrace \
-+	--disable-convert \
-+	--disable-documentation
-+
-+define Host/Compile
-+	$(call Host/Compile/Default,mkfs.btrfs)
-+endef
-+
-+define Host/Install
-+	$(INSTALL_BIN) $(HOST_BUILD_DIR)/mkfs.btrfs $(STAGING_DIR_HOST)/bin/mkfs.btrfs
-+endef
-+
-+define Host/Clean
-+	rm -f $(STAGING_DIR_HOST)/bin/mkfs.btrfs
-+endef
-+
-+$(eval $(call HostBuild))
-diff --git a/tools/btrfs-progs/patches/0001-use-pthread_join-instead-of-pthread_tryjoin_np.patch b/tools/btrfs-progs/patches/0001-use-pthread_join-instead-of-pthread_tryjoin_np.patch
-new file mode 100644
-index 00000000000..90b56b49367
---- /dev/null
-+++ b/tools/btrfs-progs/patches/0001-use-pthread_join-instead-of-pthread_tryjoin_np.patch
-@@ -0,0 +1,11 @@
-+--- a/chunk-recover.c
-++++ b/chunk-recover.c
-+@@ -887,7 +887,7 @@ static int scan_devices(struct recover_c
-+ 		for (i = 0; i < devidx; i++) {
-+ 			if (dev_scans[i].bytenr == -1)
-+ 				continue;
-+-			ret = pthread_tryjoin_np(t_scans[i],
-++			ret = pthread_join(t_scans[i],
-+ 						 (void **)&t_rets[i]);
-+ 			if (ret == EBUSY) {
-+ 				all_done = 0;
-diff --git a/tools/lzo/Makefile b/tools/lzo/Makefile
-new file mode 100644
-index 00000000000..7ce4d8f454c
---- /dev/null
-+++ b/tools/lzo/Makefile
-@@ -0,0 +1,37 @@
-+#
-+# Copyright (C) 2006-2016 OpenWrt.org
-+#
-+# This is free software, licensed under the GNU General Public License v2.
-+# See /LICENSE for more information.
-+#
-+
-+include $(TOPDIR)/rules.mk
-+
-+PKG_NAME:=lzo
-+PKG_VERSION:=2.09
-+PKG_RELEASE:=1
-+
-+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
-+PKG_SOURCE_URL:=http://www.oberhumer.com/opensource/lzo/download/
-+PKG_HASH:=f294a7ced313063c057c504257f437c8335c41bfeed23531ee4e6a2b87bcb34c
-+
-+HOST_FIXUP:=autoreconf
-+
-+HOST_BUILD_PARALLEL:=1
-+
-+include $(INCLUDE_DIR)/host-build.mk
-+
-+define Host/Configure
-+	$(call Host/Configure/Default, \
-+		--enable-shared \
-+		--enable-static \
-+	)
-+endef
-+
-+define Host/Clean
-+	rm -rf $(STAGING_DIR_HOST)/include/lzo
-+	rm -f $(STAGING_DIR_HOST)/lib/liblzo2.*
-+	rm -rf $(STAGING_DIR_HOST)/share/doc/lzo
-+endef
-+
-+$(eval $(call HostBuild))
-diff --git a/tools/util-linux/Makefile b/tools/util-linux/Makefile
-new file mode 100644
-index 00000000000..f3cfcc55463
---- /dev/null
-+++ b/tools/util-linux/Makefile
-@@ -0,0 +1,48 @@
-+#
-+# Copyright (C) 2007-2015 OpenWrt.org
-+#
-+# This is free software, licensed under the GNU General Public License v2.
-+# See /LICENSE for more information.
-+#
-+
-+include $(TOPDIR)/rules.mk
-+
-+PKG_NAME:=util-linux
-+PKG_VERSION:=2.28
-+PKG_RELEASE:=1
-+
-+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.xz
-+PKG_SOURCE_URL:=@KERNEL/linux/utils/$(PKG_NAME)/v2.28
-+PKG_HASH:=395847e2a18a2c317170f238892751e73a57104565344f8644090c8b091014bb
-+
-+HOST_BUILD_PARALLEL:=0
-+
-+PKG_FIXUP:=autoreconf
-+
-+include $(INCLUDE_DIR)/host-build.mk
-+
-+HOST_CONFIGURE_ARGS += \
-+	--disable-all-programs \
-+	--enable-libblkid	\
-+	--enable-libuuid	\
-+	--disable-bash-completion 	\
-+	--disable-nls	 	\
-+	--disable-rpath 	\
-+	--without-ncurses	\
-+	--without-python	\
-+	--without-readline	\
-+	--without-systemd	\
-+	--without-udev
-+
-+HOST_CFLAGS += $(FPIC) -std=gnu99
-+
-+define Host/Clean
-+	rm -rf $(STAGING_DIR_HOST)/include/blkid
-+	rm -f $(STAGING_DIR_HOST)/lib/libblkid.*
-+	rm -f $(STAGING_DIR_HOST)/lib/pkgconfig/blkid.pc
-+	rm -rf $(STAGING_DIR_HOST)/include/uuid
-+	rm -f $(STAGING_DIR_HOST)/lib/libuuid.*
-+	rm -f $(STAGING_DIR_HOST)/lib/pkgconfig/uuid.pc
-+endef
-+
-+$(eval $(call HostBuild))
-diff --git a/tools/util-linux/patches/0001-fix-uClibc-ng-scanf-check.patch b/tools/util-linux/patches/0001-fix-uClibc-ng-scanf-check.patch
-new file mode 100644
-index 00000000000..2da95f6cdba
---- /dev/null
-+++ b/tools/util-linux/patches/0001-fix-uClibc-ng-scanf-check.patch
-@@ -0,0 +1,34 @@
-+From 180c908e2e80552b19bf3552667fc197d6edf7b3 Mon Sep 17 00:00:00 2001
-+From: Waldemar Brodkorb <wbx@uclibc-ng.org>
-+Date: Fri, 3 Jun 2016 04:13:08 +0200
-+Subject: [PATCH] fix uClibc-ng scanf check
-+
-+uClibc-ng tries to be compatible with GNU libc and defines
-+__GLIBC__ and pretend to be version 2.2.
-+We once changed it to 2.10, but then some hard to fix problems
-+in different software packages (gcc) occured.
-+It would be better if we disable the special GNU libc checks
-+for uClibc-ng here. uClibc-ng implements the required scanf
-+functionality.
-+
-+Signed-off-by: Waldemar Brodkorb <wbx@uclibc-ng.org>
-+---
-+ configure.ac | 2 +-
-+ 1 file changed, 1 insertion(+), 1 deletion(-)
-+
-+diff --git a/configure.ac b/configure.ac
-+index f36b18c..4661c0d 100644
-+--- a/configure.ac
-++++ b/configure.ac
-+@@ -581,7 +581,7 @@ AC_CACHE_VAL([scanf_cv_alloc_modifier],
-+      #include <stdio.h>
-+      #include <unistd.h>
-+ 
-+-     #ifdef __GLIBC__
-++     #if defined(__GLIBC__) && !defined(__UCLIBC__)
-+ 
-+      #if !(__GLIBC_PREREQ(2, 7))
-+      #error %m is not available
-+-- 
-+2.1.4
-+
-diff --git a/tools/util-linux/patches/003-fix_pkgconfig_files.patch b/tools/util-linux/patches/003-fix_pkgconfig_files.patch
-new file mode 100644
-index 00000000000..cc9cd11188a
---- /dev/null
-+++ b/tools/util-linux/patches/003-fix_pkgconfig_files.patch
-@@ -0,0 +1,76 @@
-+--- a/libuuid/Makemodule.am
-++++ b/libuuid/Makemodule.am
-+@@ -4,7 +4,6 @@ include libuuid/man/Makemodule.am
-+ include libuuid/src/Makemodule.am
-+ 
-+ pkgconfig_DATA += libuuid/uuid.pc
-+-PATHFILES      += libuuid/uuid.pc
-+ EXTRA_DIST     += libuuid/COPYING
-+ 
-+ endif # BUILD_LIBUUID
-+--- a/configure.ac
-++++ b/configure.ac
-+@@ -2122,18 +2122,23 @@ AC_CONFIG_HEADERS([config.h])
-+ #
-+ AC_CONFIG_FILES([
-+ Makefile
-++libblkid/blkid.pc
-+ libblkid/docs/Makefile
-+ libblkid/docs/version.xml
-+ libblkid/src/blkid.h
-++libfdisk/fdisk.pc
-+ libfdisk/docs/Makefile
-+ libfdisk/docs/version.xml
-+ libfdisk/src/libfdisk.h
-++libmount/mount.pc
-+ libmount/docs/Makefile
-+ libmount/docs/version.xml
-+ libmount/src/libmount.h
-++libsmartcols/smartcols.pc
-+ libsmartcols/docs/Makefile
-+ libsmartcols/docs/version.xml
-+ libsmartcols/src/libsmartcols.h
-++libuuid/uuid.pc
-+ po/Makefile.in
-+ ])
-+ 
-+--- a/libblkid/Makemodule.am
-++++ b/libblkid/Makemodule.am
-+@@ -9,7 +9,6 @@ SUBDIRS += libblkid/docs
-+ endif
-+ 
-+ pkgconfig_DATA += libblkid/blkid.pc
-+-PATHFILES      += libblkid/blkid.pc
-+ dist_man_MANS  += libblkid/libblkid.3
-+ EXTRA_DIST     += libblkid/libblkid.3 libblkid/COPYING
-+ 
-+--- a/libmount/Makemodule.am
-++++ b/libmount/Makemodule.am
-+@@ -9,7 +9,6 @@ SUBDIRS += libmount/docs
-+ endif
-+ 
-+ pkgconfig_DATA += libmount/mount.pc
-+-PATHFILES      += libmount/mount.pc
-+ EXTRA_DIST     += libmount/COPYING
-+ 
-+ endif # BUILD_LIBMOUNT
-+--- a/libsmartcols/Makemodule.am
-++++ b/libsmartcols/Makemodule.am
-+@@ -9,7 +9,6 @@ SUBDIRS += libsmartcols/docs
-+ endif
-+ 
-+ pkgconfig_DATA += libsmartcols/smartcols.pc
-+-PATHFILES      += libsmartcols/smartcols.pc
-+ EXTRA_DIST     += libsmartcols/COPYING
-+ 
-+ endif # BUILD_LIBSMARTCOLS
-+--- a/libfdisk/Makemodule.am
-++++ b/libfdisk/Makemodule.am
-+@@ -8,7 +8,6 @@ SUBDIRS += libfdisk/docs
-+ endif
-+ 
-+ pkgconfig_DATA += libfdisk/fdisk.pc
-+-PATHFILES      += libfdisk/fdisk.pc
-+ EXTRA_DIST     += libfdisk/COPYING
-+ 
-+ endif # BUILD_LIBFDISK
-diff --git a/tools/zlib/Makefile b/tools/zlib/Makefile
-new file mode 100644
-index 00000000000..7837036c0f5
---- /dev/null
-+++ b/tools/zlib/Makefile
-@@ -0,0 +1,36 @@
-+#
-+# Copyright (C) 2006-2013 OpenWrt.org
-+#
-+# This is free software, licensed under the GNU General Public License v2.
-+# See /LICENSE for more information.
-+#
-+
-+include $(TOPDIR)/rules.mk
-+
-+PKG_NAME:=zlib
-+PKG_VERSION:=1.2.8
-+PKG_RELEASE:=1
-+
-+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
-+PKG_SOURCE_URL:=http://www.zlib.net @SF/libpng
-+PKG_HASH:=36658cb768a54c1d4dec43c3116c27ed893e88b02ecfcb44f2166f9c0b7f2a0d
-+
-+include $(INCLUDE_DIR)/host-build.mk
-+
-+define Host/Configure
-+	(cd $(HOST_BUILD_DIR); \
-+		./configure \
-+			--prefix=$(STAGING_DIR_HOST) \
-+			--shared \
-+			--uname=Linux \
-+	)
-+endef
-+
-+define Host/Clean
-+	rm -f $(STAGING_DIR_HOST)/include/zlib.h
-+	rm -f $(STAGING_DIR_HOST)/lib/libz.*
-+	rm -f $(STAGING_DIR_HOST)/lib/pkgconfig/zlib.pc
-+	rm -f $(STAGING_DIR_HOST)/share/man/man3/zlib.3
-+endef
-+
-+$(eval $(call HostBuild))
-
-From c91525516cac8a15024730af219c87d0009609db Mon Sep 17 00:00:00 2001
-From: Michael Altizer <xiche@verizon.net>
-Date: Mon, 26 Dec 2016 16:59:58 -0500
-Subject: [PATCH 2/4] Initial Turris Omnia support.
-
----
- .../linux/generic/files/drivers/net/phy/mvsw61xx.c |  23 +-
- .../linux/generic/files/drivers/net/phy/mvsw61xx.h |   3 +
- .../linux/mvebu/base-files/etc/board.d/02_network  |   5 +
- target/linux/mvebu/base-files/lib/mvebu.sh         |   3 +
- target/linux/mvebu/config-4.4                      |  12 +-
- .../arch/arm/boot/dts/armada-385-turris-omnia.dts  | 343 +++++++++++++++++++++
- target/linux/mvebu/image/Makefile                  |   9 +
- .../mvebu/patches-4.4/400-add_omnia_dtb.patch      |  12 +
- 8 files changed, 403 insertions(+), 7 deletions(-)
- create mode 100644 target/linux/mvebu/files/arch/arm/boot/dts/armada-385-turris-omnia.dts
- create mode 100644 target/linux/mvebu/patches-4.4/400-add_omnia_dtb.patch
+ .../linux/generic/files/drivers/net/phy/mvsw61xx.c | 24 +++++++++++++++++-----
+ .../linux/generic/files/drivers/net/phy/mvsw61xx.h |  2 ++
+ 2 files changed, 21 insertions(+), 5 deletions(-)
 
 diff --git a/target/linux/generic/files/drivers/net/phy/mvsw61xx.c b/target/linux/generic/files/drivers/net/phy/mvsw61xx.c
-index 9a689e6c81b..bf3f17c8eb9 100644
+index 9a689e6c81b..69bcae4902e 100644
 --- a/target/linux/generic/files/drivers/net/phy/mvsw61xx.c
 +++ b/target/linux/generic/files/drivers/net/phy/mvsw61xx.c
-@@ -670,16 +670,29 @@ static int _mvsw61xx_reset(struct switch_dev *dev, bool full)
+@@ -670,16 +670,30 @@ static int _mvsw61xx_reset(struct switch_dev *dev, bool full)
  					    BMCR_SPEED1000);
  		}
  
@@ -465,7 +32,6 @@ index 9a689e6c81b..bf3f17c8eb9 100644
 -			if (mode == MV_PORT_STATUS_CMODE_100BASE_X ||
 -			    mode == MV_PORT_STATUS_CMODE_1000BASE_X ||
 -			    mode == MV_PORT_STATUS_CMODE_SGMII) {
-+			printk(KERN_INFO "%s: Port %d has status 0x%hx\n", __func__, i, sts);
 +			/* enable SerDes if necessary */
 +			if (i >= 5 && full &&
 +				(mode == MV_PORT_STATUS_CMODE_100BASE_X ||
@@ -473,14 +39,16 @@ index 9a689e6c81b..bf3f17c8eb9 100644
 +				 mode == MV_PORT_STATUS_CMODE_SGMII)) {
  				mvsw61xx_enable_serdes(dev);
  			}
++
 +			/* Enable RGMII internal delay for CPU ports */
 +			if (i == state->cpu_port0 || i == state->cpu_port1) {
 +				u16 reg = sr16(dev, MV_PORTREG(PHYCTL, i));
-+				if ((reg & (MV_PHYCTL_RGMII_DELAY_RXCLK | MV_PHYCTL_RGMII_DELAY_TXCLK)) !=
-+					(MV_PHYCTL_RGMII_DELAY_RXCLK | MV_PHYCTL_RGMII_DELAY_TXCLK))
-+				{
-+					printk(KERN_INFO "%s: Enabling RGMII internal delay for port %d\n", __func__, i);
-+					reg |= MV_PHYCTL_RGMII_DELAY_RXCLK | MV_PHYCTL_RGMII_DELAY_TXCLK;
++				if ((reg & (MV_PHYCTL_RGMII_DELAY_RXCLK |
++					    MV_PHYCTL_RGMII_DELAY_TXCLK)) !=
++					   (MV_PHYCTL_RGMII_DELAY_RXCLK |
++					    MV_PHYCTL_RGMII_DELAY_TXCLK)) {
++					reg |= MV_PHYCTL_RGMII_DELAY_RXCLK |
++					       MV_PHYCTL_RGMII_DELAY_TXCLK;
 +					sw16(dev, MV_PORTREG(PHYCTL, i), reg);
 +				}
 +			}
@@ -488,18 +56,10 @@ index 9a689e6c81b..bf3f17c8eb9 100644
  	}
  
 diff --git a/target/linux/generic/files/drivers/net/phy/mvsw61xx.h b/target/linux/generic/files/drivers/net/phy/mvsw61xx.h
-index a07b09cd14c..bbb81c2682a 100644
+index a07b09cd14c..a9d0336e004 100644
 --- a/target/linux/generic/files/drivers/net/phy/mvsw61xx.h
 +++ b/target/linux/generic/files/drivers/net/phy/mvsw61xx.h
-@@ -46,6 +46,7 @@ enum {
- enum {
- 	MV_PORT_STATUS_FDX		= (1 << 10),
- 	MV_PORT_STATUS_LINK		= (1 << 11),
-+	MV_PORT_STATUS_PHY_DETECT	= (1 << 12),
- };
- 
- enum {
-@@ -78,6 +79,8 @@ enum {
+@@ -78,6 +78,8 @@ enum {
  enum {
  	MV_PHYCTL_FC_ENABLE		= (3 << 6),
  	MV_PHYCTL_FC_DISABLE		= (1 << 6),
@@ -508,29 +68,157 @@ index a07b09cd14c..bbb81c2682a 100644
  };
  
  enum {
-diff --git a/target/linux/mvebu/base-files/etc/board.d/02_network b/target/linux/mvebu/base-files/etc/board.d/02_network
-index f4a87efc914..a6976a2fea0 100755
---- a/target/linux/mvebu/base-files/etc/board.d/02_network
-+++ b/target/linux/mvebu/base-files/etc/board.d/02_network
-@@ -33,6 +33,11 @@ armada-388-clearfog)
- 		ucidef_add_switch "switch0" \
- 			"0:lan:5" "1:lan:4" "2:lan:3" "3:lan:2" "4:lan:1" "5@eth0" "6:lan:6"
+
+From 773ced7f50b1e1de7a726985f8687113b1e6aeeb Mon Sep 17 00:00:00 2001
+From: Ryan Mounce <ryan@mounce.com.au>
+Date: Fri, 14 Jul 2017 00:11:22 +0930
+Subject: [PATCH 2/3] mvebu: generate ramdisk image by default
+
+ramdisk images must be used in the installation process for upcoming
+Turris Omnia support.
+
+Signed-off-by: Ryan Mounce <ryan@mounce.com.au>
+---
+ target/linux/mvebu/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/target/linux/mvebu/Makefile b/target/linux/mvebu/Makefile
+index a07aa7cf2d2..7e00710ea04 100644
+--- a/target/linux/mvebu/Makefile
++++ b/target/linux/mvebu/Makefile
+@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
+ ARCH:=arm
+ BOARD:=mvebu
+ BOARDNAME:=Marvell Armada 37x/38x/XP
+-FEATURES:=fpu usb pci pcie gpio nand squashfs
++FEATURES:=fpu usb pci pcie gpio nand squashfs ramdisk
+ CPU_TYPE:=cortex-a9
+ CPU_SUBTYPE:=vfpv3
+ MAINTAINER:=Imre Kaloz <kaloz@openwrt.org>
+
+From e5a4f8d9f380f4dfe5759af747c21f9c227396fd Mon Sep 17 00:00:00 2001
+From: Ryan Mounce <ryan@mounce.com.au>
+Date: Sat, 3 Jun 2017 02:01:06 +0930
+Subject: [PATCH 3/3] mvebu: add support for Turris Omnia
+
+Adds support for the Turris Omnia and builds an eMMC sysupgrade image in
+the same format as the SolidRun ClearFog.
+
+An initramfs image in the simple yet Omnia-specific 'medkit' image format
+is also built in order to ease the initial flashing process.
+
+armada-385-turris-omnia.dts was added to the mainline kernel after 4.9.
+It has been backported as-is and patched separately so that the dts file
+may be removed for later kernels.
+
+Notable hardware support omissions are support for switching between SFP
+cage and copper PHY, RTC (untested), and RGB LED control.
+
+Specifications:
+- Marvell Armada 385 1.6GHz dual-core ARMv7 CPU
+- 1GB DDR3 RAM
+- 8GB eMMC Flash
+- 5x Gigabit LAN via Marvell 88E6176 Switch (2x RGMII CPU ports)
+- 1x switchable RJ45 (88E1514 PHY) / SFP SGMII WAN
+- 2x USB 3.0
+- 12x dimmable RGB LEDs controlled by independent MCU
+- 3x Mini PCIe slots
+- Optional Compex WLE200N2 Mini PCIe AR9287 2x2 802.11b/g/n (2.4GHz)
+- Optional Compex WLE900VX Mini PCIe QCA9880 3x3 802.11ac (2.4 / 5GHz)
+- Optional Quectel EC20 Mini PCIe LTE modem
+
+Flash instructions:
+If the U-Boot environment has been modified previously (likely manually via
+serial console), first use serial to reset the default environment.
+=> env default -a
+=> saveenv
+
+Method 1 - USB 'medkit' image w/o serial
+- Copy lede-mvebu-turris-omnia-sysupgrade.img.gz and
+omnia-medkit-lede-initramfs.tar.gz to the root of a USB flash drive
+formatted with FAT32 / ext2/3/4 / btrfs / XFS.
+- Disconnect other USB devices from the Omnia and connect the flash drive
+to either USB port.
+- Power on the Omnia and hold down the rear reset button until 4 LEDs are
+illuminated, then release.
+- Wait approximately 2 minutes for the Turris Omnia to flash itself with
+the temporary image, during which LEDs will change multiple times.
+- Connect a computer to a LAN port of the Turris Omnia with a DHCP client
+- (if necessary) ssh-keygen -R 192.168.1.1
+- ssh root@192.168.1.1
+$ mount /dev/sda1 /mnt
+$ sysupgrade /mnt/lede-mvebu-turris-omnia-sysupgrade.img.gz
+- Wait another minute for the final LEDE image to be flashed. The Turris
+Omnia will reboot itself and you can remove the flash drive.
+
+Method 2 - TFTP w/ serial
+- Extract omnia-medkit-lede-initramfs.tar.gz and copy dtb + zImage to TFTP
+server (rename if desired)
+- Connect Turris Omnia WAN port to DHCP-enabled network with TFTP server
+- Connect serial console and interrupt U-Boot
+=> dhcp
+=> setenv serverip <tftp_server_ip_here>
+=> tftpboot 0x01000000 zImage
+=> tftpboot 0x02000000 dtb
+=> bootz 0x01000000 - 0x02000000
+- LEDE will now boot from ramdisk
+- Download lede-mvebu-turris-omnia-sysupgrade.img.gz to /tmp/
+$ sysupgrade /tmp/lede-mvebu-turris-omnia-sysupgrade.img.gz
+- Wait another minute for the final LEDE image to be flashed. The Turris
+Omnia will reboot itself.
+
+Signed-off-by: Ryan Mounce <ryan@mounce.com.au>
+---
+ package/boot/uboot-envtools/files/mvebu            |   3 +
+ .../linux/mvebu/base-files/etc/board.d/02_network  |   5 +
+ target/linux/mvebu/base-files/lib/mvebu.sh         |   3 +
+ .../linux/mvebu/base-files/lib/upgrade/clearfog.sh |  13 +
+ .../linux/mvebu/base-files/lib/upgrade/platform.sh |   4 +-
+ target/linux/mvebu/config-4.9                      |  10 +-
+ .../arch/arm/boot/dts/armada-385-turris-omnia.dts  | 392 +++++++++++++++++++++
+ target/linux/mvebu/image/Makefile                  |  45 ++-
+ .../mvebu/patches-4.9/003-add_switch_nodes.patch   |  20 ++
+ .../mvebu/patches-4.9/010-build_new_dtbs.patch     |   3 +-
+ 10 files changed, 491 insertions(+), 7 deletions(-)
+ create mode 100644 target/linux/mvebu/files/arch/arm/boot/dts/armada-385-turris-omnia.dts
+
+diff --git a/package/boot/uboot-envtools/files/mvebu b/package/boot/uboot-envtools/files/mvebu
+index e33830e0a76..24ca6798e81 100644
+--- a/package/boot/uboot-envtools/files/mvebu
++++ b/package/boot/uboot-envtools/files/mvebu
+@@ -22,6 +22,9 @@ armada-385-linksys-shelby)
+ armada-385-linksys-rango)
+ 	ubootenv_add_uci_config "/dev/mtd1" "0x0" "0x20000" "0x20000"
  	;;
 +armada-385-turris-omnia)
-+	ucidef_set_interfaces_lan_wan "eth0 eth2" "eth1"
-+	ucidef_add_switch "switch0" \
-+		"0:lan:0" "1:lan:1" "2:lan:2" "3:lan:3" "4:lan:4" "5@eth0" "6@eth2"
++	ubootenv_add_uci_config "/dev/mtd0" "0xC0000" "0x10000" "0x40000"
 +	;;
- *)
- 	ucidef_set_interface_lan "eth0"
+ armada-xp-linksys-mamba)
+ 	ubootenv_add_uci_config "/dev/mtd1" "0x0" "0x40000" "0x20000"
  	;;
+diff --git a/target/linux/mvebu/base-files/etc/board.d/02_network b/target/linux/mvebu/base-files/etc/board.d/02_network
+index 4fc95406ca6..5ff119ef18c 100755
+--- a/target/linux/mvebu/base-files/etc/board.d/02_network
++++ b/target/linux/mvebu/base-files/etc/board.d/02_network
+@@ -23,6 +23,11 @@ armada-xp-linksys-mamba)
+ 	ucidef_add_switch "switch0" \
+ 		"0:lan:4" "1:lan:3" "2:lan:2" "3:lan:1" "5@eth0" "4:wan" "6@eth1"
+ 	;;
++armada-385-turris-omnia)
++	ucidef_set_interface_wan "eth2"
++	ucidef_add_switch "switch0" \
++		"0:lan:0" "1:lan:1" "2:lan:2" "3:lan:3" "4:lan:4" "5@eth1" "6@eth0"
++	;;
+ armada-388-clearfog-*)
+ 	# eth0 is standalone ethernet
+ 	# eth1 is switch (-pro) or standalone ethernet (-base)
 diff --git a/target/linux/mvebu/base-files/lib/mvebu.sh b/target/linux/mvebu/base-files/lib/mvebu.sh
-index 9a4c53ed40c..da3ac83cf7e 100755
+index fb3ddee4f55..1cd87507a34 100755
 --- a/target/linux/mvebu/base-files/lib/mvebu.sh
 +++ b/target/linux/mvebu/base-files/lib/mvebu.sh
-@@ -56,6 +56,9 @@ mvebu_board_detect() {
- 	*"SolidRun Clearfog A1")
- 		name="armada-388-clearfog"
+@@ -59,6 +59,9 @@ mvebu_board_detect() {
+ 	*"SolidRun Clearfog Base A1")
+ 		name="armada-388-clearfog-base"
  		;;
 +	*"Turris Omnia")
 +		name="armada-385-turris-omnia"
@@ -538,24 +226,63 @@ index 9a4c53ed40c..da3ac83cf7e 100755
  	esac
  
  	[ -z "$name" ] && name="unknown"
-diff --git a/target/linux/mvebu/config-4.4 b/target/linux/mvebu/config-4.4
-index d8199707b11..8f88e882c62 100644
---- a/target/linux/mvebu/config-4.4
-+++ b/target/linux/mvebu/config-4.4
-@@ -146,7 +146,6 @@ CONFIG_DMA_ENGINE=y
- CONFIG_DMA_ENGINE_RAID=y
- CONFIG_DMA_OF=y
- CONFIG_DTC=y
--# CONFIG_DW_DMAC_PCI is not set
- CONFIG_EARLY_PRINTK=y
- CONFIG_EDAC_ATOMIC_SCRUB=y
- CONFIG_EDAC_SUPPORT=y
-@@ -176,11 +175,14 @@ CONFIG_GENERIC_STRNCPY_FROM_USER=y
+diff --git a/target/linux/mvebu/base-files/lib/upgrade/clearfog.sh b/target/linux/mvebu/base-files/lib/upgrade/clearfog.sh
+index 5388b221983..76f490b98b4 100644
+--- a/target/linux/mvebu/base-files/lib/upgrade/clearfog.sh
++++ b/target/linux/mvebu/base-files/lib/upgrade/clearfog.sh
+@@ -18,8 +18,21 @@ platform_check_image_clearfog() {
+ }
+ 
+ platform_do_upgrade_clearfog() {
++	. /lib/functions.sh
++	local board=$(board_name)
++
+ 	sync
+ 	get_image "$1" | dd of=/dev/mmcblk0 bs=2M conv=fsync
++
++	case "$board" in
++	armada-385-turris-omnia)
++		fw_setenv lede_bootargs 'earlyprintk console=ttyS0,115200 root=/dev/mmcblk0p2 rootfstype=auto rootwait'
++		fw_setenv lede_mmcload 'setenv bootargs "$lede_bootargs cfg80211.freg=$regdomain"; fatload mmc 0 0x01000000 zImage; fatload mmc 0 0x02000000 armada-385-turris-omnia.dtb'
++		fw_setenv factory_mmcload 'setenv bootargs "$bootargs cfg80211.freg=$regdomain"; btrload mmc 0 0x01000000 boot/zImage @; btrload mmc 0 0x02000000 boot/dtb @'
++		fw_setenv mmcboot 'run lede_mmcload || run factory_mmcload; bootz 0x01000000 - 0x02000000'
++		;;
++	esac
++
+ 	sleep 1
+ }
+ 
+diff --git a/target/linux/mvebu/base-files/lib/upgrade/platform.sh b/target/linux/mvebu/base-files/lib/upgrade/platform.sh
+index 8241d1edcf9..c639d0d38ab 100755
+--- a/target/linux/mvebu/base-files/lib/upgrade/platform.sh
++++ b/target/linux/mvebu/base-files/lib/upgrade/platform.sh
+@@ -16,7 +16,7 @@ platform_do_upgrade() {
+ 	armada-385-linksys-caiman|armada-385-linksys-cobra|armada-385-linksys-rango|armada-385-linksys-shelby|armada-xp-linksys-mamba)
+ 		platform_do_upgrade_linksys "$ARGV"
+ 		;;
+-	armada-388-clearfog-base|armada-388-clearfog-pro)
++	armada-385-turris-omnia|armada-388-clearfog-base|armada-388-clearfog-pro)
+ 		platform_do_upgrade_clearfog "$ARGV"
+ 		;;
+ 	*)
+@@ -29,7 +29,7 @@ platform_copy_config() {
+ 	armada-385-linksys-caiman|armada-385-linksys-cobra|armada-385-linksys-rango|armada-385-linksys-shelby|armada-xp-linksys-mamba)
+ 		platform_copy_config_linksys
+ 		;;
+-	armada-388-clearfog-base|armada-388-clearfog-pro)
++	armada-385-turris-omnia|armada-388-clearfog-base|armada-388-clearfog-pro)
+ 		platform_copy_config_clearfog "$ARGV"
+ 		;;
+ 	esac
+diff --git a/target/linux/mvebu/config-4.9 b/target/linux/mvebu/config-4.9
+index 87040a493a3..b208aff54c5 100644
+--- a/target/linux/mvebu/config-4.9
++++ b/target/linux/mvebu/config-4.9
+@@ -185,10 +185,13 @@ CONFIG_GENERIC_STRNCPY_FROM_USER=y
  CONFIG_GENERIC_STRNLEN_USER=y
  CONFIG_GLOB=y
  CONFIG_GPIOLIB=y
 +CONFIG_GPIOLIB_IRQCHIP=y
- CONFIG_GPIO_DEVRES=y
 +CONFIG_GPIO_GENERIC=y
 +CONFIG_GPIO_GENERIC_PLATFORM=y
  CONFIG_GPIO_MVEBU=y
@@ -566,7 +293,7 @@ index d8199707b11..8f88e882c62 100644
  CONFIG_GPIO_SYSFS=y
  CONFIG_HANDLE_DOMAIN_IRQ=y
  CONFIG_HARDIRQS_SW_RESEND=y
-@@ -238,8 +240,11 @@ CONFIG_HWMON=y
+@@ -246,8 +249,11 @@ CONFIG_HWMON=y
  CONFIG_HZ_FIXED=0
  CONFIG_HZ_PERIODIC=y
  CONFIG_I2C=y
@@ -578,7 +305,7 @@ index d8199707b11..8f88e882c62 100644
  CONFIG_I2C_MV64XXX=y
  CONFIG_INITRAMFS_SOURCE=""
  CONFIG_IOMMU_HELPER=y
-@@ -270,6 +275,8 @@ CONFIG_MAGIC_SYSRQ=y
+@@ -279,6 +285,8 @@ CONFIG_MAGIC_SYSRQ=y
  CONFIG_MANGLE_BOOTARGS=y
  CONFIG_MARVELL_PHY=y
  CONFIG_MDIO_BOARDINFO=y
@@ -586,21 +313,56 @@ index d8199707b11..8f88e882c62 100644
 +CONFIG_MDIO_BUS_MUX_GPIO=y
  CONFIG_MDIO_I2C=y
  CONFIG_MEMORY=y
- CONFIG_MIGHT_HAVE_CACHE_L2X0=y
-@@ -333,6 +340,7 @@ CONFIG_OLD_SIGSUSPEND3=y
- CONFIG_ORION_WATCHDOG=y
- CONFIG_OUTER_CACHE=y
- CONFIG_OUTER_CACHE_SYNC=y
-+CONFIG_PADATA=y
- CONFIG_PAGE_OFFSET=0xC0000000
- CONFIG_PCI=y
- # CONFIG_PCI_DOMAINS_GENERIC is not set
+ # CONFIG_MFD_MAX77620 is not set
 diff --git a/target/linux/mvebu/files/arch/arm/boot/dts/armada-385-turris-omnia.dts b/target/linux/mvebu/files/arch/arm/boot/dts/armada-385-turris-omnia.dts
 new file mode 100644
-index 00000000000..aedff5e945a
+index 00000000000..be16ce39fb3
 --- /dev/null
 +++ b/target/linux/mvebu/files/arch/arm/boot/dts/armada-385-turris-omnia.dts
-@@ -0,0 +1,343 @@
+@@ -0,0 +1,392 @@
++/*
++ * Device Tree file for the Turris Omnia
++ *
++ * Copyright (C) 2016 Uwe Kleine-König <uwe@kleine-koenig.org>
++ * Copyright (C) 2016 Tomas Hlavacek <tmshlvkc@gmail.com>
++ *
++ * This file is dual-licensed: you can use it either under the terms
++ * of the GPL or the X11 license, at your option. Note that this dual
++ * licensing only applies to this file, and not this project as a
++ * whole.
++ *
++ *  a) This file is licensed under the terms of the GNU General Public
++ *     License version 2.  This program is licensed "as is" without
++ *     any warranty of any kind, whether express or implied.
++ *
++ * Or, alternatively,
++ *
++ *  b) Permission is hereby granted, free of charge, to any person
++ *     obtaining a copy of this software and associated documentation
++ *     files (the "Software"), to deal in the Software without
++ *     restriction, including without limitation the rights to use,
++ *     copy, modify, merge, publish, distribute, sublicense, and/or
++ *     sell copies of the Software, and to permit persons to whom the
++ *     Software is furnished to do so, subject to the following
++ *     conditions:
++ *
++ *     The above copyright notice and this permission notice shall be
++ *     included in all copies or substantial portions of the Software.
++ *
++ *     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++ *     EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
++ *     OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
++ *     NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
++ *     HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++ *     WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++ *     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
++ *     OTHER DEALINGS IN THE SOFTWARE.
++ */
++
++/*
++ * Schematic available at https://www.turris.cz/doc/_media/rtrom01-schema.pdf
++ */
++
 +/dts-v1/;
 +
 +#include <dt-bindings/gpio/gpio.h>
@@ -609,10 +371,9 @@ index 00000000000..aedff5e945a
 +
 +/ {
 +	model = "Turris Omnia";
-+	compatible = "marvell,armada385","marvell,armada380";
++	compatible = "cznic,turris-omnia", "marvell,armada385", "marvell,armada380";
 +
 +	chosen {
-+		bootargs = "console=ttyS0,115200";
 +		stdout-path = &uart0;
 +	};
 +
@@ -628,23 +389,26 @@ index 00000000000..aedff5e945a
 +			  MBUS_ID(0x09, 0x15) 0 0xf1110000 0x10000>;
 +
 +		internal-regs {
-+			sdhci@d8000 {
++
++			/* USB part of the PCIe2/USB 2.0 port */
++			usb@58000 {
 +				status = "okay";
-+				bus-width = <8>;
-+				no-1-8-v;
-+				non-removable;
 +			};
 +
 +			sata@a8000 {
 +				status = "okay";
 +			};
 +
-+			/* USB part of the eSATA/USB 2.0 port */
-+			usb@58000 {
++			sdhci@d8000 {
++				pinctrl-names = "default";
++				pinctrl-0 = <&sdhci_pins>;
 +				status = "okay";
++
++				bus-width = <8>;
++				no-1-8-v;
++				non-removable;
 +			};
 +
-+			/* 2x external USB3 */
 +			usb3@f0000 {
 +				status = "okay";
 +			};
@@ -663,47 +427,249 @@ index 00000000000..aedff5e945a
 +			};
 +
 +			pcie@2,0 {
-+				/* Port 2, Lane 0 */
++				/* Port 1, Lane 0 */
 +				status = "okay";
 +			};
 +
 +			pcie@3,0 {
-+				/* Port 3, Lane 0 */
++				/* Port 2, Lane 0 */
 +				status = "okay";
 +			};
-+
 +		};
 +	};
++};
 +
-+	gpio-keys {
-+		compatible = "gpio-keys";
++/* Connected to 88E6176 switch, port 6 */
++&eth0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&ge0_rgmii_pins>;
++	status = "okay";
++	phy-mode = "rgmii";
++
++	fixed-link {
++		speed = <1000>;
++		full-duplex;
++	};
++};
++
++/* Connected to 88E6176 switch, port 5 */
++&eth1 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&ge1_rgmii_pins>;
++	status = "okay";
++	phy-mode = "rgmii";
++
++	fixed-link {
++		speed = <1000>;
++		full-duplex;
++	};
++};
++
++/* WAN port */
++&eth2 {
++	status = "okay";
++	phy-mode = "sgmii";
++	phy = <&phy1>;
++};
++
++&i2c0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&i2c0_pins>;
++	status = "okay";
++
++	i2cmux@70 {
++		compatible = "nxp,pca9547";
 +		#address-cells = <1>;
 +		#size-cells = <0>;
++		reg = <0x70>;
++		status = "okay";
 +
-+		button@212 {
-+			label = "mcuint";
-+			linux,code = <BTN_MISC>;
-+			gpios = <&gpio1 11 GPIO_ACTIVE_LOW>;
-+			debounce-interval = <0>;
++		i2c@0 {
++			#address-cells = <1>;
++			#size-cells = <0>;
++			reg = <0>;
++
++			/* STM32F0 command interface at address 0x2a */
++			/* leds device (in STM32F0) at address 0x2b */
++
++			eeprom@54 {
++				compatible = "atmel,24c64";
++				reg = <0x54>;
++
++				/* The EEPROM contains data for bootloader.
++				 * Contents:
++				 * 	struct omnia_eeprom {
++				 * 		u32 magic; (=0x0341a034 in LE)
++				 *		u32 ramsize; (in GiB)
++				 * 		char regdomain[4];
++				 * 		u32 crc32;
++				 * 	};
++				 */
++			};
++		};
++
++		i2c@1 {
++			#address-cells = <1>;
++			#size-cells = <0>;
++			reg = <1>;
++
++			/* routed to PCIe0/mSATA connector (CN7A) */
++		};
++
++		i2c@2 {
++			#address-cells = <1>;
++			#size-cells = <0>;
++			reg = <2>;
++
++			/* routed to PCIe1/USB2 connector (CN61A) */
++		};
++
++		i2c@3 {
++			#address-cells = <1>;
++			#size-cells = <0>;
++			reg = <3>;
++
++			/* routed to PCIe2 connector (CN62A) */
++		};
++
++		i2c@4 {
++			#address-cells = <1>;
++			#size-cells = <0>;
++			reg = <4>;
++
++			/* routed to SFP+ */
++		};
++
++		i2c@5 {
++			#address-cells = <1>;
++			#size-cells = <0>;
++			reg = <5>;
++
++			/* ATSHA204A at address 0x64 */
++		};
++
++		i2c@6 {
++			#address-cells = <1>;
++			#size-cells = <0>;
++			reg = <6>;
++
++			/* exposed on pin header */
++		};
++
++		i2c@7 {
++			#address-cells = <1>;
++			#size-cells = <0>;
++			reg = <7>;
++
++			pcawan: gpio@71 {
++				/*
++				 * GPIO expander for SFP+ signals and
++				 * and phy irq
++				 */
++				compatible = "nxp,pca9538";
++				reg = <0x71>;
++
++				pinctrl-names = "default";
++				pinctrl-0 = <&pcawan_pins>;
++
++				interrupt-parent = <&gpio1>;
++				interrupts = <14 IRQ_TYPE_LEVEL_LOW>;
++
++				gpio-controller;
++				#gpio-cells = <2>;
++			};
 +		};
 +	};
++};
 +
-+	mvsw61xx {
++&mdio {
++	pinctrl-names = "default";
++	pinctrl-0 = <&mdio_pins>;
++	status = "okay";
++
++	phy1: phy@1 {
 +		status = "okay";
-+		compatible = "marvell,88e6176";
-+		reg = <0x10>;
-+		is-indirect;
-+		mii-bus = <&mdio>;
-+		cpu-port-0 = <5>;
-+		cpu-port-1 = <6>;
++		compatible = "ethernet-phy-id0141.0DD1", "ethernet-phy-ieee802.3-c22";
++		reg = <1>;
 +
-+		/* IRQ connected to MPP45. */
-+		/* interrupt-parent = <&gpio1>;
-+		interrupts = <13 IRQ_TYPE_LEVEL_LOW>; */
++		/* irq is connected to &pcawan pin 7 */
++	};
++
++	/* Switch MV88E6176 at address 0x10 */
++	switch@10 {
++		compatible = "marvell,mv88e6085";
++		#address-cells = <1>;
++		#size-cells = <0>;
++		dsa,member = <0 0>;
++
++		reg = <0x10>;
++
++		ports {
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			ports@0 {
++				reg = <0>;
++				label = "lan0";
++			};
++
++			ports@1 {
++				reg = <1>;
++				label = "lan1";
++			};
++
++			ports@2 {
++				reg = <2>;
++				label = "lan2";
++			};
++
++			ports@3 {
++				reg = <3>;
++				label = "lan3";
++			};
++
++			ports@4 {
++				reg = <4>;
++				label = "lan4";
++			};
++
++			ports@5 {
++				reg = <5>;
++				label = "cpu";
++				ethernet = <&eth1>;
++				phy-mode = "rgmii-id";
++
++				fixed-link {
++					speed = <1000>;
++					full-duplex;
++				};
++			};
++
++			/* port 6 is connected to eth0 */
++		};
++	};
++};
++
++&pinctrl {
++	pcawan_pins: pcawan-pins {
++		marvell,pins = "mpp46";
++		marvell,function = "gpio";
++	};
++
++	spi0cs0_pins: spi0cs0-pins {
++		marvell,pins = "mpp25";
++		marvell,function = "spi0";
++	};
++
++	spi0cs1_pins: spi0cs1-pins {
++		marvell,pins = "mpp26";
++		marvell,function = "spi0";
 +	};
 +};
 +
 +&spi0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&spi0_pins &spi0cs0_pins>;
 +	status = "okay";
 +
 +	spi-nor@0 {
@@ -713,898 +679,167 @@ index 00000000000..aedff5e945a
 +		reg = <0>;
 +		spi-max-frequency = <40000000>;
 +
-+		partition@0 {
-+			reg = <0x0 0x00100000>;
-+			label = "U-Boot";
-+		};
-+		partition@1 {
-+			reg = <0x00100000 0x00700000>;
-+			label = "Rescue system";
-+		};
-+
-+	};
-+};
-+
-+&i2c0 {
-+	pinctrl-names = "default";
-+	pinctrl-0 = <&i2c0_pins>;
-+	status = "okay";
-+	clock-frequency = <100000>;
-+
-+	i2cmux@70 {
-+		compatible = "nxp,pca9547";
-+		#address-cells = <1>;
-+		#size-cells = <0>;
-+		reg = <0x70>;
-+		status = "okay";
-+		i2c@0 {
++		partitions {
++			compatible = "fixed-partitions";
 +			#address-cells = <1>;
-+			#size-cells = <0>;
-+			reg = <0>;
-+			status = "okay";
++			#size-cells = <1>;
 +
-+			/* Config memory */
-+			eeprom@54 {
-+				compatible = "at,24c64";
-+				reg = <0x54>;
++			partition@0 {
++				reg = <0x0 0x00100000>;
++				label = "U-Boot";
 +			};
 +
-+			/* Additional device: STM-32, address 0x2a, INT on 43. */
-+			leds@2b {
-+				compatible = "turris-leds,omnia";
-+				reg = <0x2b>;
-+				#address-cells = <1>;
-+				#size-cells = <0>;
-+
-+				led0 {
-+					label = "user2";
-+					reg = <0x0>;
-+				};
-+
-+				led1 {
-+					label = "user1";
-+					reg = <0x1>;
-+				};
-+
-+				led2 {
-+					label = "pci3";
-+					reg = <0x2>;
-+				};
-+
-+				led3 {
-+					label = "pci2";
-+					reg = <0x3>;
-+				};
-+
-+				led4 {
-+					label = "pci1";
-+					reg = <0x4>;
-+				};
-+
-+				led5 {
-+					label = "wan";
-+					reg = <0x5>;
-+				};
-+
-+				led6 {
-+					label = "lan4";
-+					reg = <0x6>;
-+				};
-+
-+				led7 {
-+					label = "lan3";
-+					reg = <0x7>;
-+				};
-+
-+				led8 {
-+					label = "lan2";
-+					reg = <0x8>;
-+				};
-+
-+				led9 {
-+					label = "lan1";
-+					reg = <0x9>;
-+				};
-+
-+				led10 {
-+					label = "lan0";
-+					reg = <0xa>;
-+				};
-+
-+				led11 {
-+					label = "power";
-+					reg = <0xb>;
-+				};
-+
-+				led12 {
-+					label = "all";
-+					reg = <0xc>;
-+				};
-+			};
-+		};
-+
-+		i2c@1 {
-+			/* SATA */
-+			#address-cells = <1>;
-+			#size-cells = <0>;
-+			reg = <1>;
-+		};
-+
-+		i2c@2 {
-+			/* PCI 1 */
-+			#address-cells = <1>;
-+			#size-cells = <0>;
-+			reg = <2>;
-+		};
-+
-+		i2c@3 {
-+			/* PCI 0 */
-+			#address-cells = <1>;
-+			#size-cells = <0>;
-+			reg = <3>;
-+		};
-+
-+		i2c@4 {
-+			/* SFP */
-+			#address-cells = <1>;
-+			#size-cells = <0>;
-+			reg = <4>;
-+		};
-+
-+		i2c@5 {
-+			/* ATSHA */
-+			#address-cells = <1>;
-+			#size-cells = <0>;
-+			reg = <5>;
-+		};
-+
-+		i2c@6 {
-+			/* User GPIO header */
-+			#address-cells = <1>;
-+			#size-cells = <0>;
-+			reg = <6>;
-+		};
-+
-+		i2c@7 {
-+			/* SFP+ GPIO expander */
-+			#address-cells = <1>;
-+			#size-cells = <0>;
-+			reg = <7>;
-+
-+			sfpgpio: gpio@71 {
-+				compatible = "nxp,pca9538";
-+				reg = <0x71>;
-+				interrupt-parent = <&gpio1>;
-+				interrupts = <14 IRQ_TYPE_LEVEL_LOW>;
-+				gpio-controller;
-+				#gpio-cells = <2>;
++			partition@100000 {
++				reg = <0x00100000 0x00700000>;
++				label = "Rescue system";
 +			};
 +		};
 +	};
++
++	/* MISO, MOSI, SCLK and CS1 are routed to pin header CN11 */
 +};
 +
 +&uart0 {
++	/* Pin header CN10 */
 +	pinctrl-names = "default";
 +	pinctrl-0 = <&uart0_pins>;
 +	status = "okay";
 +};
 +
 +&uart1 {
++	/* Pin header CN11 */
 +	pinctrl-names = "default";
 +	pinctrl-0 = <&uart1_pins>;
 +	status = "okay";
 +};
-+
-+&mdio {
-+	status = "okay";
-+
-+	phy1: phy@1 {
-+		status = "okay";
-+		compatible = "marvell,88E1514", "marvell,88E1510", "ethernet-phy-ieee802.3-c22";
-+		reg = <1>;
-+		/* IRQ connected to MPP46. */
-+		/* interrupt-parent = <&gpio1>;
-+		interrupts = <14 IRQ_TYPE_LEVEL_LOW>; */
-+	};
-+};
-+
-+&eth0 {
-+	status = "okay";
-+	pinctrl-0 = <&ge0_rgmii_pins>;
-+	phy-mode = "rgmii-id";
-+
-+	fixed-link {
-+		speed = <1000>;
-+		full-duplex;
-+	};
-+};
-+
-+&eth1 {
-+	status = "okay";
-+	pinctrl-0 = <&ge1_rgmii_pins>;
-+	phy-mode = "rgmii-id";
-+
-+	fixed-link {
-+		speed = <1000>;
-+		full-duplex;
-+	};
-+};
-+
-+&eth2 {
-+	status = "okay";
-+	phy-mode = "sgmii";
-+	phy = <&phy1>;
-+};
-+
-+&pinctrl {
-+	user_pin: user-pin {
-+		marvell,pins = "mpp18", "mpp33", "mpp34", "mpp35", "mpp36",
-+				"mpp42", "mpp44", "mpp47", "mpp51", "mpp56";
-+		marvell,function = "gpio";
-+	};
-+};
-+
 diff --git a/target/linux/mvebu/image/Makefile b/target/linux/mvebu/image/Makefile
-index d4596c5935f..c3faaa17cd7 100644
+index f0c4b09c9ef..2d276568365 100644
 --- a/target/linux/mvebu/image/Makefile
 +++ b/target/linux/mvebu/image/Makefile
-@@ -189,4 +189,13 @@ define Device/globalscale-mirabox
+@@ -33,6 +33,10 @@ define Build/boot-scr-cfbase
+ 	mkimage -A arm -O linux -T script -C none -a 0 -e 0 -d cfbase-boot.script $@.bootscript
+ endef
+ 
++define Build/boot-scr-dummy
++	echo "# Boot script not used for this target" > $@.bootscript
++endef
++
+ define Build/boot-img
+ 	rm -f $@.boot
+ 	mkfs.fat -C $@.boot 16384
+@@ -41,10 +45,29 @@ define Build/boot-img
+ 	mcopy -i $@.boot $@.bootscript ::boot.scr
+ endef
+ 
++define Build/omnia-medkit-initramfs
++	$(TAR) -c -T /dev/null -f $@
++	rm -rf $(dir $(IMAGE_KERNEL))boot
++	mkdir -p $(dir $(IMAGE_KERNEL))boot/boot/
++	cp $(KDIR)/zImage-initramfs $(dir $(IMAGE_KERNEL))boot/boot/zImage
++	cp $(DTS_DIR)/$(DEVICE_DTS).dtb $(dir $(IMAGE_KERNEL))boot/boot/dtb
++	$(TAR) -rp --numeric-owner --owner=0 --group=0 --sort=name \
++		$(if $(SOURCE_DATE_EPOCH),--mtime="@$(SOURCE_DATE_EPOCH)") \
++		--file=$@ -C $(dir $(IMAGE_KERNEL))boot/ .
++endef
++
++define Build/sdcard-u-boot-clearfog
++	cp "$(STAGING_DIR_IMAGE)/clearfog-u-boot-spl.kwb" $@.kwb
++endef
++
++define Build/sdcard-u-boot-dummy
++	touch $@.kwb
++endef
++
+ define Build/sdcard-img
+ 	ROOTFS_SIZE=$$(( $(CONFIG_TARGET_ROOTFS_PARTSIZE) * 1024 * 2 )); \
+ 	./gen_mvebu_sdcard_img.sh $@ \
+-		"$(STAGING_DIR_IMAGE)/clearfog-u-boot-spl.kwb" \
++		$@.kwb \
+ 		c 32768 $@.boot \
+ 		83 $$ROOTFS_SIZE $(IMAGE_ROOTFS)
+ endef
+@@ -182,7 +205,7 @@ define Device/armada-388-clearfog-pro
+   DEVICE_TITLE := SolidRun ClearFog Pro
+   DEVICE_PACKAGES := mkf2fs e2fsprogs swconfig kmod-fs-vfat kmod-nls-cp437 kmod-nls-iso8859-1
+   IMAGES := sdcard.img.gz
+-  IMAGE/sdcard.img.gz := boot-scr-cfpro | boot-img | sdcard-img | gzip | append-metadata
++  IMAGE/sdcard.img.gz := boot-scr-cfpro | boot-img | sdcard-u-boot-clearfog | sdcard-img | gzip | append-metadata
+   IMAGE_NAME = $$(IMAGE_PREFIX)-$$(2)
+   DEVICE_DTS := armada-388-clearfog-pro armada-388-clearfog-base
+ endef
+@@ -194,7 +217,7 @@ define Device/armada-388-clearfog-base
+   DEVICE_TITLE := SolidRun ClearFog Base
+   DEVICE_PACKAGES := mkf2fs e2fsprogs kmod-fs-vfat kmod-nls-cp437 kmod-nls-iso8859-1
+   IMAGES := sdcard.img.gz
+-  IMAGE/sdcard.img.gz := boot-scr-cfbase | boot-img | sdcard-img | gzip | append-metadata
++  IMAGE/sdcard.img.gz := boot-scr-cfbase | boot-img | sdcard-u-boot-clearfog | sdcard-img | gzip | append-metadata
+   IMAGE_NAME = $$(IMAGE_PREFIX)-$$(2)
+   DEVICE_DTS := armada-388-clearfog-pro armada-388-clearfog-base
+ endef
+@@ -208,4 +231,20 @@ define Device/globalscale-mirabox
  endef
  TARGET_DEVICES += globalscale-mirabox
  
 +define Device/turris-omnia
-+  $(Device/NAND-256K)
-+  DEVICE_DTS := armada-385-turris-omnia
++  KERNEL_INSTALL := 1
++  KERNEL := kernel-bin
++  KERNEL_INITRAMFS := kernel-bin
 +  DEVICE_TITLE := Turris Omnia
-+  DEVICE_PACKAGES := kmod-mmc kmod-usb3 kmod-usb-storage kmod-i2c-core \
-+	kmod-ath9k kmod-ath10k ath10k-firmware-qca988x btrfs-progs
++  DEVICE_PACKAGES :=  \
++  	  mkf2fs e2fsprogs swconfig kmod-fs-vfat kmod-nls-cp437 kmod-nls-iso8859-1 \
++  	  wpad-mini kmod-ath9k kmod-ath10k ath10k-firmware-qca988x
++  IMAGES := $$(IMAGE_PREFIX)-sysupgrade.img.gz omnia-medkit-$$(IMAGE_PREFIX)-initramfs.tar.gz
++  IMAGE/$$(IMAGE_PREFIX)-sysupgrade.img.gz := boot-scr-dummy | boot-img | sdcard-u-boot-dummy | sdcard-img | gzip | append-metadata
++  IMAGE/omnia-medkit-$$(IMAGE_PREFIX)-initramfs.tar.gz := omnia-medkit-initramfs | gzip
++  IMAGE_NAME = $$(2)
++  DEVICE_DTS := armada-385-turris-omnia
 +endef
 +TARGET_DEVICES += turris-omnia
 +
  $(eval $(call BuildImage))
-diff --git a/target/linux/mvebu/patches-4.4/400-add_omnia_dtb.patch b/target/linux/mvebu/patches-4.4/400-add_omnia_dtb.patch
-new file mode 100644
-index 00000000000..e3feb95f69d
---- /dev/null
-+++ b/target/linux/mvebu/patches-4.4/400-add_omnia_dtb.patch
-@@ -0,0 +1,12 @@
-+diff --git a/arch/arm/boot/dts/Makefile b/arch/arm/boot/dts/Makefile
-+index 8365e3e..a444db1 100644
-+--- a/arch/arm/boot/dts/Makefile
-++++ b/arch/arm/boot/dts/Makefile
-+@@ -749,6 +749,7 @@ dtb-$(CONFIG_MACH_ARMADA_38X) += \
-+ 	armada-385-linksys-caiman.dtb \
-+ 	armada-385-linksys-cobra.dtb \
-+ 	armada-385-linksys-shelby.dtb \
-++	armada-385-turris-omnia.dts \
-+ 	armada-388-clearfog.dtb \
-+ 	armada-388-db.dtb \
-+ 	armada-388-gp.dtb \
-
-From 720a6e9b2fcf629da87012410404ca802240d4d0 Mon Sep 17 00:00:00 2001
-From: Michael Altizer <xiche@verizon.net>
-Date: Wed, 28 Dec 2016 03:21:08 -0500
-Subject: [PATCH 3/4] omnia: Add more drivers for I2C, LEDs, EEPROM, etc.
-
----
- target/linux/mvebu/config-4.4                      |  11 +
- .../linux/mvebu/patches-4.4/401-omnia-leds.patch   | 524 +++++++++++++++++++++
- 2 files changed, 535 insertions(+)
- create mode 100644 target/linux/mvebu/patches-4.4/401-omnia-leds.patch
-
-diff --git a/target/linux/mvebu/config-4.4 b/target/linux/mvebu/config-4.4
-index 8f88e882c62..337a310d392 100644
---- a/target/linux/mvebu/config-4.4
-+++ b/target/linux/mvebu/config-4.4
-@@ -149,6 +149,7 @@ CONFIG_DTC=y
- CONFIG_EARLY_PRINTK=y
- CONFIG_EDAC_ATOMIC_SCRUB=y
- CONFIG_EDAC_SUPPORT=y
-+CONFIG_EEPROM_AT24=y
- CONFIG_EXT4_FS=y
- # CONFIG_F2FS_CHECK_FS is not set
- CONFIG_F2FS_FS=y
-@@ -167,6 +168,7 @@ CONFIG_GENERIC_IO=y
- CONFIG_GENERIC_IRQ_CHIP=y
- CONFIG_GENERIC_IRQ_SHOW=y
- CONFIG_GENERIC_IRQ_SHOW_LEVEL=y
-+CONFIG_GENERIC_MSI_IRQ=y
- CONFIG_GENERIC_PCI_IOMAP=y
- CONFIG_GENERIC_PHY=y
- CONFIG_GENERIC_SCHED_CLOCK=y
-@@ -240,11 +242,17 @@ CONFIG_HWMON=y
- CONFIG_HZ_FIXED=0
- CONFIG_HZ_PERIODIC=y
- CONFIG_I2C=y
-+CONFIG_I2C_ALGOBIT=y
-+CONFIG_I2C_ALGOPCA=y
-+CONFIG_I2C_ALGOPCF=y
- CONFIG_I2C_ARB_GPIO_CHALLENGE=y
- CONFIG_I2C_BOARDINFO=y
- CONFIG_I2C_CHARDEV=y
-+CONFIG_I2C_DEBUG_BUS=y
- CONFIG_I2C_MUX=y
- CONFIG_I2C_MUX_GPIO=y
-+CONFIG_I2C_MUX_PCA954x=y
-+CONFIG_I2C_MUX_PINCTRL=y
- CONFIG_I2C_MV64XXX=y
- CONFIG_INITRAMFS_SOURCE=""
- CONFIG_IOMMU_HELPER=y
-@@ -257,6 +265,7 @@ CONFIG_IRQ_WORK=y
- # CONFIG_IWMMXT is not set
- CONFIG_JBD2=y
- CONFIG_LEDS_GPIO=y
-+CONFIG_LEDS_OMNIA=y
- CONFIG_LEDS_PCA963X=y
- CONFIG_LEDS_TLC591XX=y
- CONFIG_LIBFDT=y
-@@ -277,6 +286,7 @@ CONFIG_MARVELL_PHY=y
- CONFIG_MDIO_BOARDINFO=y
- CONFIG_MDIO_BUS_MUX=y
- CONFIG_MDIO_BUS_MUX_GPIO=y
-+CONFIG_MDIO_BUS_MUX_MMIOREG=y
- CONFIG_MDIO_I2C=y
- CONFIG_MEMORY=y
- CONFIG_MIGHT_HAVE_CACHE_L2X0=y
-@@ -344,6 +354,7 @@ CONFIG_PADATA=y
- CONFIG_PAGE_OFFSET=0xC0000000
- CONFIG_PCI=y
- # CONFIG_PCI_DOMAINS_GENERIC is not set
-+CONFIG_PCI_MSI=y
- CONFIG_PCI_MVEBU=y
- CONFIG_PERF_USE_VMALLOC=y
- CONFIG_PGTABLE_LEVELS=2
-diff --git a/target/linux/mvebu/patches-4.4/401-omnia-leds.patch b/target/linux/mvebu/patches-4.4/401-omnia-leds.patch
-new file mode 100644
-index 00000000000..e2c4042e2eb
---- /dev/null
-+++ b/target/linux/mvebu/patches-4.4/401-omnia-leds.patch
-@@ -0,0 +1,524 @@
-+commit 1e70bc11fe2f3b30ab7ab11bbba73a84fd0bbe52
-+Author: Michael Altizer <xiche@verizon.net>
-+Date:   Sun Dec 25 19:55:25 2016 -0500
-+
-+    Omnia: Add LED driver for MCU LED driver
-+    
-+    Turris Omnia board have sophisticated and unfotunatelly completely
-+    proprietary I2C LED driver implemented in the MCU on the board.
-+    
-+    The I2C protocol description will be published in
-+    https://www.turris.cz/en/hardware .
-+    
-+    Add driver called leds-omnia that implements LED interface and
-+    adds sysfs files for setting:
-+    
-+    global_brightness - [0..100] = PWM base for all the LEDs. It is the
-+    maximum intensity. Particular colors on each LED might be decreased
-+    individually.
-+    
-+    color - [0..255] [0..255] [0..255] = PWM for each color on each LED.
-+    
-+    autonomous [0|1] = 1=MCU drives the LED according to its default
-+    function, blink from Linux LED driver is ignored;
-+    0=Linux LED driver sets brightness/blink.
-+    
-+    brightness = Linux LED interface. Only two states are available
-+    0=OFF and 1..255=ON.
-+    
-+    The MCU supports setting all LEDs at once by setting the virtual
-+    12th LED. Support this feature in the kernel driver.
-+
-+diff --git a/drivers/leds/Kconfig b/drivers/leds/Kconfig
-+index b1ab8bd..b3d5c8b 100644
-+--- a/drivers/leds/Kconfig
-++++ b/drivers/leds/Kconfig
-+@@ -568,6 +568,13 @@ config LEDS_SEAD3
+diff --git a/target/linux/mvebu/patches-4.9/003-add_switch_nodes.patch b/target/linux/mvebu/patches-4.9/003-add_switch_nodes.patch
+index 38a48d308e7..f2ad6c7497e 100644
+--- a/target/linux/mvebu/patches-4.9/003-add_switch_nodes.patch
++++ b/target/linux/mvebu/patches-4.9/003-add_switch_nodes.patch
+@@ -38,3 +38,23 @@
+  };
+  
+  &pinctrl {
++--- a/arch/arm/boot/dts/armada-385-turris-omnia.dts
+++++ b/arch/arm/boot/dts/armada-385-turris-omnia.dts
++@@ -115,6 +115,17 @@
++ 			};
++ 		};
++ 	};
+++
+++	mvsw61xx {
+++		compatible = "marvell,88e6176";
+++		status = "okay";
+++		reg = <0x10>;
+++		is-indirect;
+++
+++		mii-bus = <&mdio>;
+++		cpu-port-0 = <6>;
+++		cpu-port-1 = <5>;
+++	};
++ };
 + 
-+ comment "LED driver for blink(1) USB RGB LED is under Special HID drivers (HID_THINGM)"
-+ 
-++config LEDS_OMNIA
-++       tristate "LED support for the Turris Omnia board"
-++       depends on LEDS_CLASS
-++       help
-++         Say Y here to include support for the LED driver on Turris Omnia
-++         board.
-++
-+ config LEDS_BLINKM
-+ 	tristate "LED support for the BlinkM I2C RGB LED"
-+ 	depends on LEDS_CLASS
-+diff --git a/drivers/leds/Makefile b/drivers/leds/Makefile
-+index 392247a..f09d830 100644
-+--- a/drivers/leds/Makefile
-++++ b/drivers/leds/Makefile
-+@@ -66,6 +66,7 @@ obj-$(CONFIG_LEDS_MENF21BMC)		+= leds-menf21bmc.o
-+ obj-$(CONFIG_LEDS_KTD2692)		+= leds-ktd2692.o
-+ obj-$(CONFIG_LEDS_POWERNV)		+= leds-powernv.o
-+ obj-$(CONFIG_LEDS_SEAD3)		+= leds-sead3.o
-++obj-$(CONFIG_LEDS_OMNIA)               += leds-omnia.o
-+ 
-+ # LED SPI Drivers
-+ obj-$(CONFIG_LEDS_DAC124S085)		+= leds-dac124s085.o
-+diff --git a/drivers/leds/leds-omnia.c b/drivers/leds/leds-omnia.c
-+new file mode 100644
-+index 0000000..defa585
-+--- /dev/null
-++++ b/drivers/leds/leds-omnia.c
-+@@ -0,0 +1,457 @@
-++/*
-++ * Copyright 2016 CZ.NIC, z.s.p.o.
-++ *
-++ * Author: Tomas Hlavacek <tmshlvck@gmail.com>
-++ *
-++ * This program is free software; you can redistribute it and/or modify
-++ * it under the terms of the GNU General Public License version 2 as
-++ * published by the Free Software Foundation. 
-++ */
-++
-++#include <linux/module.h>
-++#include <linux/delay.h>
-++#include <linux/string.h>
-++#include <linux/ctype.h>
-++#include <linux/leds.h>
-++#include <linux/err.h>
-++#include <linux/i2c.h>
-++#include <linux/slab.h>
-++#include <linux/of.h>
-++#include <linux/workqueue.h>
-++
-++#define MAX_LEDS 13
-++#define ALL_LEDS_INDEX 12
-++
-++#define LED_AUTONOMOUS_ADDR 3
-++#define LED_ONOFF_ADDR 4
-++#define LED_COLOR_ADDR 5
-++#define GLOB_BRIGHTNESS_READ 8
-++#define GLOB_BRIGHTNESS_WRITE 7
-++
-++
-++
-++struct omnia_platform_data {
-++        struct led_platform_data leds;
-++};
-++
-++static const struct i2c_device_id omnia_id[] = {
-++	{ "omnia", 0 },
-++	{ }
-++};
-++MODULE_DEVICE_TABLE(i2c, omnia_id);
-++
-++struct omnia_led_mcu {
-++	struct mutex mutex;
-++	struct i2c_client *client;
-++	struct omnia_led *leds;
-++};
-++
-++struct omnia_led {
-++	struct omnia_led_mcu *chip;
-++	struct led_classdev led_cdev;
-++	int led_num; /* 0 .. 11 + 12=ALL */
-++	char name[32];
-++	u8 autonomous;
-++	u8 r;
-++	u8 g;
-++	u8 b;
-++	struct work_struct work;
-++	enum led_brightness new_brightness;
-++};
-++
-++static int omnia_led_brightness_set(struct omnia_led *led,
-++				enum led_brightness brightness)
-++{
-++	int ret;
-++
-++	mutex_lock(&led->chip->mutex);
-++
-++	ret = i2c_smbus_write_byte_data(led->chip->client, LED_ONOFF_ADDR,
-++			(led->led_num | ((brightness != LED_OFF)<<4)));
-++
-++	mutex_unlock(&led->chip->mutex);
-++	return ret;
-++}
-++
-++static int omnia_led_autonomous_set(struct omnia_led *led, int autonomous)
-++{
-++	int ret, i;
-++
-++	mutex_lock(&led->chip->mutex);
-++
-++	if (led->autonomous == (autonomous != 0)) {
-++		mutex_unlock(&led->chip->mutex);
-++		return 0;
-++	}
-++
-++	led->autonomous = (autonomous != 0);
-++
-++	if (led->led_num == ALL_LEDS_INDEX) {
-++		for (i=0; i<(MAX_LEDS-1); i++)
-++			led->chip->leds[i].autonomous = led->autonomous;
-++	}
-++
-++	ret = i2c_smbus_write_byte_data(led->chip->client, LED_AUTONOMOUS_ADDR,
-++			(u8)(led->led_num | ((!led->autonomous) << 4)));
-++
-++	mutex_unlock(&led->chip->mutex);
-++	return ret;
-++}
-++
-++static int omnia_glob_brightness_set(struct omnia_led_mcu *chip,
-++					int glob_brightness)
-++{
-++	int ret;
-++
-++	mutex_lock(&chip->mutex);
-++
-++	ret = i2c_smbus_write_byte_data(chip->client, GLOB_BRIGHTNESS_WRITE,
-++						(u8)glob_brightness);
-++
-++	mutex_unlock(&chip->mutex);
-++	return ret;
-++}
-++
-++static int omnia_glob_brightness_get(struct omnia_led_mcu *chip)
-++{
-++	int ret;
-++
-++	mutex_lock(&chip->mutex);
-++
-++	ret = i2c_smbus_read_byte_data(chip->client, GLOB_BRIGHTNESS_READ);
-++
-++	mutex_unlock(&chip->mutex);
-++	return ret;
-++}
-++
-++static int omnia_led_color_set(struct omnia_led *led, u8 r, u8 g, u8 b)
-++{
-++	int ret, i;
-++	u8 buf[5];
-++
-++	buf[0] = LED_COLOR_ADDR;
-++	buf[1] = led->led_num;
-++	buf[2] = r;
-++	buf[3] = g;
-++	buf[4] = b;
-++
-++	mutex_lock(&led->chip->mutex);
-++
-++	ret = i2c_master_send(led->chip->client, buf, 5);
-++
-++	if (led->led_num == ALL_LEDS_INDEX) {
-++		for (i=0; i<(MAX_LEDS-1); i++) {
-++			led->chip->leds[i].r = led->r;
-++			led->chip->leds[i].g = led->g;
-++			led->chip->leds[i].b = led->b;
-++		}
-++	}
-++
-++	mutex_unlock(&led->chip->mutex);
-++	return -(ret<=0);
-++}
-++
-++static void omnia_led_set_async(struct led_classdev *led_cdev,
-++        enum led_brightness value)
-++{
-++	struct omnia_led *led =
-++		container_of(led_cdev, struct omnia_led, led_cdev);
-++
-++	led->new_brightness = value;
-++
-++	schedule_work(&led->work);
-++}
-++
-++static void omnia_led_work(struct work_struct *work)
-++{
-++        struct omnia_led *led;
-++        led = container_of(work, struct omnia_led, work);
-++
-++        omnia_led_brightness_set(led, led->new_brightness);
-++}
-++
-++static struct omnia_platform_data *
-++omnia_dt_init(struct i2c_client *client)
-++{
-++	struct device_node *np = client->dev.of_node, *child;
-++	struct omnia_platform_data *pdata;
-++	struct led_info *leds;
-++	int count;
-++
-++	count = of_get_child_count(np);
-++	if (!count || count > MAX_LEDS)
-++		return ERR_PTR(-ENODEV);
-++
-++	leds = devm_kzalloc(&client->dev,
-++			sizeof(struct led_info) * MAX_LEDS, GFP_KERNEL);
-++	if (!leds)
-++		return ERR_PTR(-ENOMEM);
-++
-++	for_each_child_of_node(np, child) {
-++		u32 reg;
-++		int res;
-++
-++		res = of_property_read_u32(child, "reg", &reg);
-++		if ((res != 0) || (reg >= MAX_LEDS))
-++			continue;
-++		leds[reg].name =
-++			of_get_property(child, "label", NULL) ? : child->name;
-++		leds[reg].default_trigger =
-++			of_get_property(child, "linux,default-trigger", NULL);
-++	}
-++	pdata = devm_kzalloc(&client->dev,
-++			     sizeof(struct omnia_platform_data), GFP_KERNEL);
-++	if (!pdata)
-++		return ERR_PTR(-ENOMEM);
-++
-++	pdata->leds.leds = leds;
-++	pdata->leds.num_leds = MAX_LEDS;
-++
-++	return pdata;
-++}
-++
-++static ssize_t global_brightness_show(struct device *d,
-++                struct device_attribute *attr, char *buf)
-++{
-++	struct i2c_client *client = to_i2c_client(d);
-++	struct omnia_led_mcu *chip = i2c_get_clientdata(client);
-++
-++	return scnprintf(buf, PAGE_SIZE, "%d\n",
-++				omnia_glob_brightness_get(chip));
-++}
-++
-++static ssize_t global_brightness_store(struct device *d,
-++                struct device_attribute *attr, const char *buf, size_t count)
-++{
-++	struct i2c_client *client = to_i2c_client(d);
-++        struct omnia_led_mcu *chip = i2c_get_clientdata(client);
-++	int ret;
-++	int global_brightness;
-++
-++	if ((sscanf(buf, "%i", &global_brightness)) != 1)
-++		return -EINVAL;
-++
-++	ret = omnia_glob_brightness_set(chip, global_brightness);
-++	if (ret < 0)
-++		return ret;
-++
-++	return count;
-++}
-++static DEVICE_ATTR_RW(global_brightness);
-++
-++static ssize_t autonomous_show(struct device *d,
-++                struct device_attribute *attr, char *buf)
-++{
-++	struct led_classdev *led_cdev = dev_get_drvdata(d);
-++	struct omnia_led *led =
-++			container_of(led_cdev, struct omnia_led, led_cdev);
-++
-++	return scnprintf(buf, PAGE_SIZE, "%d\n", led->autonomous);
-++}
-++
-++static ssize_t autonomous_store(struct device *d,
-++                struct device_attribute *attr, const char *buf, size_t count)
-++{
-++	int ret, autonomous;
-++	struct led_classdev *led_cdev = dev_get_drvdata(d);
-++	struct omnia_led *led =
-++			container_of(led_cdev, struct omnia_led, led_cdev);
-++
-++	if ((sscanf(buf, "%i", &autonomous)) != 1)
-++		return -EINVAL;
-++
-++	ret = omnia_led_autonomous_set(led, autonomous);
-++	if (ret < 0)
-++		return ret;
-++
-++	led->autonomous = autonomous;
-++	return count;
-++}
-++static DEVICE_ATTR_RW(autonomous);
-++
-++static ssize_t color_show(struct device *d,
-++                struct device_attribute *attr, char *buf)
-++{
-++	struct led_classdev *led_cdev = dev_get_drvdata(d);
-++	struct omnia_led *led =
-++			container_of(led_cdev, struct omnia_led, led_cdev);
-++
-++	return scnprintf(buf, PAGE_SIZE, "%d %d %d\n", led->r, led->g, led->b);
-++}
-++
-++static ssize_t color_store(struct device *d,
-++                struct device_attribute *attr, const char *buf, size_t count)
-++{
-++	int ret, r, g, b;
-++	struct led_classdev *led_cdev = dev_get_drvdata(d);
-++	struct omnia_led *led =
-++			container_of(led_cdev, struct omnia_led, led_cdev);
-++
-++	if ((sscanf(buf, "%i %i %i", &r, &g, &b)) != 3)
-++		return -EINVAL;
-++
-++	ret = omnia_led_color_set(led, r, g, b);
-++	if (ret < 0)
-++		return ret;
-++
-++	led->r = r;
-++	led->g = g;
-++	led->b = b;
-++	return count;
-++}
-++static DEVICE_ATTR_RW(color);
-++
-++
-++static const struct of_device_id of_omnia_match[] = {
-++	{ .compatible = "turris-leds,omnia", },
-++	{},
-++};
-++MODULE_DEVICE_TABLE(of, of_omnia_match);
-++
-++static int omnia_probe(struct i2c_client *client,
-++					const struct i2c_device_id *id)
-++{
-++	struct omnia_led_mcu *chip;
-++	struct omnia_led *leds;
-++	struct omnia_platform_data *pdata;
-++	int i, err;
-++
-++	pdata = dev_get_platdata(&client->dev);
-++
-++	if (!pdata) {
-++		pdata = omnia_dt_init(client);
-++		if (IS_ERR(pdata)) {
-++			dev_warn(&client->dev, "could not parse configuration\n");
-++			pdata = NULL;
-++		}
-++	}
-++
-++	chip = devm_kzalloc(&client->dev, sizeof(*chip),
-++				GFP_KERNEL);
-++	if (!chip)
-++		return -ENOMEM;
-++	leds = devm_kzalloc(&client->dev, MAX_LEDS * sizeof(*leds),
-++				GFP_KERNEL);
-++	if (!leds)
-++		return -ENOMEM;
-++
-++	i2c_set_clientdata(client, chip);
-++
-++	mutex_init(&chip->mutex);
-++	chip->client = client;
-++	chip->leds = leds;
-++
-++	for (i = 0; i < MAX_LEDS; i++) {
-++		leds[i].led_num = i;
-++		leds[i].chip = chip;
-++		INIT_WORK(&leds[i].work, omnia_led_work);
-++
-++		/* Platform data can specify LED names and default triggers */
-++		if (pdata && i < pdata->leds.num_leds) {
-++			if (pdata->leds.leds[i].name)
-++				snprintf(leds[i].name,
-++					 sizeof(leds[i].name), "omnia-led:%s",
-++					 pdata->leds.leds[i].name);
-++			if (pdata->leds.leds[i].default_trigger)
-++				leds[i].led_cdev.default_trigger =
-++					pdata->leds.leds[i].default_trigger;
-++		}
-++		if (!pdata || i >= pdata->leds.num_leds ||
-++						!pdata->leds.leds[i].name)
-++			snprintf(leds[i].name, sizeof(leds[i].name),
-++				 "omnia-led:%d", i);
-++
-++		leds[i].led_cdev.name = leds[i].name;
-++		leds[i].led_cdev.brightness_set = omnia_led_set_async;
-++
-++		err = led_classdev_register(&client->dev, &leds[i].led_cdev);
-++		if (err < 0)
-++			goto exit;
-++
-++		err = device_create_file(leds[i].led_cdev.dev,
-++						&dev_attr_autonomous);
-++		if (err < 0) {
-++			dev_err(leds[i].led_cdev.dev,
-++				"failed to create attribute autonomous\n");
-++			goto exit;
-++		}
-++
-++		err = device_create_file(leds[i].led_cdev.dev,
-++						&dev_attr_color);
-++		if (err < 0) {
-++			dev_err(leds[i].led_cdev.dev,
-++				"failed to create attribute color\n");
-++			goto exit;
-++		}
-++
-++		/* Set AUTO for all LEDs by default */
-++		leds[i].autonomous = 0;
-++		omnia_led_autonomous_set(&leds[i], 1);
-++
-++		/* Set brightness to LED_OFF by default */
-++		omnia_led_brightness_set(&leds[i], LED_OFF);
-++
-++		/* MCU default color is white */
-++		leds[i].r = 255;
-++		leds[i].g = 255;
-++		leds[i].b = 255;
-++	}
-++
-++	err = device_create_file(&client->dev, &dev_attr_global_brightness);
-++	if (err < 0) {
-++		dev_err(&client->dev,
-++			"failed to create attribute global_brightness\n");
-++		goto exit;
-++	}
-++
-++	return 0;
-++
-++exit:
-++	device_remove_file(&client->dev, &dev_attr_global_brightness);
-++	while (i--) {
-++		device_remove_file(chip->leds[i].led_cdev.dev,
-++			&dev_attr_color);
-++		device_remove_file(chip->leds[i].led_cdev.dev,
-++			&dev_attr_autonomous);
-++
-++		led_classdev_unregister(&leds[i].led_cdev);
-++	}
-++
-++	return err;
-++}
-++
-++static int omnia_remove(struct i2c_client *client)
-++{
-++	struct omnia_led_mcu *chip = i2c_get_clientdata(client);
-++	int i;
-++
-++	device_remove_file(&client->dev, &dev_attr_global_brightness);
-++
-++	for (i = 0; i < MAX_LEDS; i++) {
-++		device_remove_file(chip->leds[i].led_cdev.dev,
-++			&dev_attr_color);
-++		device_remove_file(chip->leds[i].led_cdev.dev,
-++			&dev_attr_autonomous);
-++
-++		led_classdev_unregister(&chip->leds[i].led_cdev);
-++	}
-++
-++	return 0;
-++}
-++
-++static struct i2c_driver omnia_driver = {
-++	.driver = {
-++		.name	= "leds-omnia",
-++		.of_match_table = of_match_ptr(of_omnia_match),
-++	},
-++	.probe	= omnia_probe,
-++	.remove	= omnia_remove,
-++	.id_table = omnia_id,
-++};
-++
-++module_i2c_driver(omnia_driver);
-++
-++MODULE_AUTHOR("Tomas Hlavacek <tmshlvck@gmail.com>");
-++MODULE_DESCRIPTION("Turris Omnia LED driver");
-++MODULE_LICENSE("GPL v2");
-++
-
-From eec3759ba0dd77a2709b40538827dac5a8722e85 Mon Sep 17 00:00:00 2001
-From: Michael Altizer <xiche@verizon.net>
-Date: Wed, 28 Dec 2016 19:01:11 -0500
-Subject: [PATCH 4/4] mvebu: add uBoot environment info for Turris Omnia
-
----
- package/boot/uboot-envtools/files/mvebu | 3 +++
- 1 file changed, 3 insertions(+)
-
-diff --git a/package/boot/uboot-envtools/files/mvebu b/package/boot/uboot-envtools/files/mvebu
-index 2bbbc236614..b11fc9c7ba4 100644
---- a/package/boot/uboot-envtools/files/mvebu
-+++ b/package/boot/uboot-envtools/files/mvebu
-@@ -26,6 +26,9 @@ armada-385-linksys-rango)
- armada-xp-linksys-mamba)
- 	ubootenv_add_uci_config "/dev/mtd1" "0x0" "0x40000" "0x20000"
- 	;;
-+armada-385-turris-omnia)
-+	ubootenv_add_uci_config "/dev/mtd0" "0xC0000" "0x10000" "0x40000"
-+	;;
- esac
- 
- config_load ubootenv
++ /* Connected to 88E6176 switch, port 6 */
+diff --git a/target/linux/mvebu/patches-4.9/010-build_new_dtbs.patch b/target/linux/mvebu/patches-4.9/010-build_new_dtbs.patch
+index 1eb647df9c6..dbda6619eb4 100644
+--- a/target/linux/mvebu/patches-4.9/010-build_new_dtbs.patch
++++ b/target/linux/mvebu/patches-4.9/010-build_new_dtbs.patch
+@@ -1,11 +1,12 @@
+ --- a/arch/arm/boot/dts/Makefile
+ +++ b/arch/arm/boot/dts/Makefile
+-@@ -921,6 +921,8 @@ dtb-$(CONFIG_MACH_ARMADA_38X) += \
++@@ -921,6 +921,9 @@ dtb-$(CONFIG_MACH_ARMADA_38X) += \
+  	armada-385-db-ap.dtb \
+  	armada-385-linksys-caiman.dtb \
+  	armada-385-linksys-cobra.dtb \
+ +	armada-385-linksys-rango.dtb \
+ +	armada-385-linksys-shelby.dtb \
+++	armada-385-turris-omnia.dtb \
+  	armada-388-clearfog.dtb \
+  	armada-388-db.dtb \
+  	armada-388-gp.dtb \
