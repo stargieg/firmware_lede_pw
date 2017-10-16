@@ -149,7 +149,6 @@ firmwares: stamp-clean-firmwares .stamp-firmwares
 	    echo -e "\n *** Building Kathleen image file for profile \"$${PROFILE}\" with packages list \"$${PACKAGES_FILE}\".\n"; \
 	    $(MAKE) -C $(IB_BUILD_DIR)/imgbldr image PROFILE="$$PROFILE" PACKAGES="$$PACKAGES_LIST" $$CUSTOM_POSTINST_PARAM || exit 1; \
 	    mkdir -p $(IB_BUILD_DIR)/bin/$$PACKAGES_FILE; \
-	    cp -a $(IB_BUILD_DIR)/imgbldr/build_dir/target-*/root-*/usr/lib/opkg/status $(IB_BUILD_DIR)/bin/$$PACKAGES_FILE/opkg-status.txt ;\
 	    mv $(IB_BUILD_DIR)/imgbldr/bin/targets/$(MAINTARGET)/$(SUBTARGET)/* $(IB_BUILD_DIR)/bin/$$PACKAGES_FILE/; \
 	  done; \
 	done
