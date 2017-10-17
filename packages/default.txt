@@ -13,6 +13,8 @@ px5g-standalone
 #libustream-wolfssl
 libustream-openssl
 #libustream-mbedtls
+luci2-ui-base
+luci2-rpc-rrdns
 
 # Common extra
 #6in4
@@ -34,6 +36,8 @@ arp-scan
 #vnstat
 #ethtool
 #usbutils
+acme
+addrwatch
 
 # Set firmware defaults
 pw-defaults
